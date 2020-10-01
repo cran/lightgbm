@@ -1,12 +1,11 @@
 Package: lightgbm
 Type: Package
 Title: Light Gradient Boosting Machine
-Version: 3.0.0
-Date: 2020-09-11
+Version: 3.0.0.2
+Date: 2020-09-29
 Authors@R: c(
     person("Guolin", "Ke", email = "guolin.ke@microsoft.com", role = c("aut", "cre")),
     person("Damien", "Soukhavong", email = "damien.soukhavong@skema.edu", role = c("aut")),
-    person("Yachen", "Yan", role = c("ctb")),
     person("James", "Lamb", email="jaylamb20@gmail.com", role = c("aut")),
     person("Qi", "Meng", role = c("aut")),
     person("Thomas", "Finley", role = c("aut")),
@@ -15,8 +14,13 @@ Authors@R: c(
     person("Weidong", "Ma", role = c("aut")),
     person("Qiwei", "Ye", role = c("aut")),
     person("Tie-Yan", "Liu", role = c("aut")),
+    person("Yachen", "Yan", role = c("ctb")),
     person("Microsoft Corporation", role = c("cph")),
-    person("Dropbox, Inc.", role = c("cph"))
+    person("Dropbox, Inc.", role = c("cph")),
+    person("Jay", "Loden", role = c("cph")),
+    person("Dave", "Daeschler", role = c("cph")),
+    person("Giampaolo", "Rodola", role = c("cph")),
+    person("IBM Corporation", role = c("ctb"))
     )
 Description: Tree based algorithms can be improved by introducing boosting frameworks. 
     'LightGBM' is one such framework, based on Ke, Guolin et al. (2017) <https://papers.nips.cc/paper/6907-lightgbm-a-highly-efficient-gradient-boosting-decision>.
@@ -41,10 +45,9 @@ Imports: data.table (>= 1.9.6), graphics, jsonlite (>= 1.0), Matrix (>=
         1.1-0), methods, utils
 SystemRequirements: C++11
 RoxygenNote: 7.1.1
-Packaged: 2020-09-11 15:05:31 UTC; jlamb
+Packaged: 2020-09-30 03:51:20 UTC; jlamb
 Author: Guolin Ke [aut, cre],
   Damien Soukhavong [aut],
-  Yachen Yan [ctb],
   James Lamb [aut],
   Qi Meng [aut],
   Thomas Finley [aut],
@@ -53,8 +56,13 @@ Author: Guolin Ke [aut, cre],
   Weidong Ma [aut],
   Qiwei Ye [aut],
   Tie-Yan Liu [aut],
+  Yachen Yan [ctb],
   Microsoft Corporation [cph],
-  Dropbox, Inc. [cph]
+  Dropbox, Inc. [cph],
+  Jay Loden [cph],
+  Dave Daeschler [cph],
+  Giampaolo Rodola [cph],
+  IBM Corporation [ctb]
 Maintainer: Guolin Ke <guolin.ke@microsoft.com>
 Repository: CRAN
-Date/Publication: 2020-09-21 08:40:06 UTC
+Date/Publication: 2020-10-01 08:30:05 UTC

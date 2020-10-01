@@ -4,7 +4,7 @@
 #   * https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Configure-and-cleanup
 
 AC_PREREQ(2.69)
-AC_INIT([lightgbm], [3.0.0], [], [lightgbm], [])
+AC_INIT([lightgbm], [3.0.0.2], [], [lightgbm], [])
 
 ###########################
 # find compiler and flags #
@@ -125,6 +125,17 @@ then
         echo '     brew install libomp'
         echo '***********************************************************************************************'
     fi
+fi
+
+###########
+# Solaris #
+###########
+
+# some headers used in lib_lightgbm are not available on the Solaris
+# systems CRAN tests on
+if test `uname -s` = "SunOS"
+then
+    LGB_CPPFLAGS+=" -DON_SOLARIS=1"
 fi
 
 # substitute variables from this script into Makevars.in
