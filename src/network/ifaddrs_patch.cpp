@@ -3,7 +3,7 @@
  * Licensed under the BSD 3-Clause License.
  * See https://github.com/giampaolo/psutil/blob/master/LICENSE
  */
-#ifdef ON_SOLARIS
+#if (defined(sun) || defined(__sun)) && (defined(__SVR4) || defined(__svr4__))
 
 #include <string.h>
 #include <stdlib.h>
@@ -125,5 +125,4 @@ error:
     return (-1);
 }
 
-#endif
-// ON_SOLARIS
+#endif  // (defined(sun) || defined(__sun)) && (defined(__SVR4) || defined(__svr4__))

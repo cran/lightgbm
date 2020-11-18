@@ -272,7 +272,7 @@ namespace LightGBM {
 class GPUTreeLearner: public SerialTreeLearner {
  public:
   #ifdef _MSC_VER
-    #pragma warning(disable : 4702)
+
   #endif
   explicit GPUTreeLearner(const Config* tree_config) : SerialTreeLearner(tree_config) {
     Log::Fatal("GPU Tree Learner was not enabled in this build.\n"

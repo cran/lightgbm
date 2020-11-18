@@ -47,7 +47,7 @@ typedef void* FastConfigHandle; /*!< \brief Handle of FastConfig. */
 LIGHTGBM_C_EXPORT const char* LGBM_GetLastError();
 
 /*!
- * \brief Register a callback function for log redirecting. 
+ * \brief Register a callback function for log redirecting.
  * \param callback The callback function to register
  * \return 0 when succeed, -1 when failure happens
  */
@@ -1300,7 +1300,7 @@ LIGHTGBM_C_EXPORT int LGBM_NetworkInitWithFunctions(int num_machines,
 static char* LastErrorMsg() { static THREAD_LOCAL char err_msg[512] = "Everything is fine"; return err_msg; }
 
 #ifdef _MSC_VER
-  #pragma warning(disable : 4996)
+
 #endif
 /*!
  * \brief Set string message of the last error.
