@@ -1,8 +1,8 @@
 Package: lightgbm
 Type: Package
 Title: Light Gradient Boosting Machine
-Version: 3.1.0
-Date: 2020-11-15
+Version: 3.1.1
+Date: 2020-12-07
 Authors@R: c(
     person("Guolin", "Ke", email = "guolin.ke@microsoft.com", role = c("aut", "cre")),
     person("Damien", "Soukhavong", email = "damien.soukhavong@skema.edu", role = c("aut")),
@@ -45,7 +45,7 @@ Imports: data.table (>= 1.9.6), graphics, jsonlite (>= 1.0), Matrix (>=
         1.1-0), methods, utils
 SystemRequirements: C++11
 RoxygenNote: 7.1.1
-Packaged: 2020-11-16 02:40:16 UTC; jlamb
+Packaged: 2020-12-07 18:06:29 UTC; root
 Author: Guolin Ke [aut, cre],
   Damien Soukhavong [aut],
   James Lamb [aut],
@@ -65,4 +65,4 @@ Author: Guolin Ke [aut, cre],
   IBM Corporation [ctb]
 Maintainer: Guolin Ke <guolin.ke@microsoft.com>
 Repository: CRAN
-Date/Publication: 2020-11-18 23:20:11 UTC
+Date/Publication: 2020-12-08 07:00:02 UTC
