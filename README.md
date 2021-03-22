@@ -169,6 +169,27 @@ After installing these other libraries, follow the steps in ["Installing from So
 Rscript build_r.R --use-gpu
 ```
 
+You may also need or want to provide additional configuration, depending on your setup. For example, you may need to provide locations for Boost and OpenCL.
+
+```shell
+Rscript build_r.R \
+    --use-gpu \
+    --opencl-library=/usr/lib/x86_64-linux-gnu/libOpenCL.so \
+    --boost-librarydir=/usr/lib/x86_64-linux-gnu
+```
+
+The following options correspond to the [CMake FindBoost options](https://cmake.org/cmake/help/latest/module/FindBoost.html) by the same names.
+
+* `--boost-root`
+* `--boost-dir`
+* `--boost-include-dir`
+* `--boost-librarydir`
+
+The following options correspond to the [CMake FindOpenCL options](https://cmake.org/cmake/help/latest/module/FindOpenCL.html) by the same names.
+
+* `--opencl-include-dir`
+* `--opencl-library`
+
 ### Installing Precompiled Binaries
 
 Precompiled binaries for Mac and Windows are prepared by CRAN a few days after each release to CRAN. They can be installed with the following R code.
@@ -207,21 +228,19 @@ Please visit [demo](https://github.com/microsoft/LightGBM/tree/master/R-package/
 Testing
 -------
 
-The R package's unit tests are run automatically on every commit, via integrations like [Travis CI](https://travis-ci.org/microsoft/LightGBM/) and [Azure DevOps](https://dev.azure.com/lightgbm-ci/lightgbm-ci/_build). Adding new tests in `R-package/tests/testthat` is a valuable way to improve the reliability of the R package.
+The R package's unit tests are run automatically on every commit, via integrations like [GitHub Actions](https://github.com/microsoft/LightGBM/actions). Adding new tests in `R-package/tests/testthat` is a valuable way to improve the reliability of the R package.
 
 When adding tests, you may want to use test coverage to identify untested areas and to check if the tests you've added are covering all branches of the intended code.
 
-The example below shows how to generate code coverage for the R package on a macOS or Linux setup, using `gcc-8` to compile `LightGBM`. To adjust for your environment, swap out the 'Install' step with [the relevant code from the instructions above](#install).
+The example below shows how to generate code coverage for the R package on a macOS or Linux setup. To adjust for your environment, refer to [the customization step described above](#custom-installation-linux-mac).
 
 ```shell
 # Install
-export CXX=/usr/local/bin/g++-8
-export CC=/usr/local/bin/gcc-8
-Rscript build_r.R --skip-install
+sh build-cran-package.sh
 
 # Get coverage
 Rscript -e " \
-    coverage  <- covr::package_coverage('./lightgbm_r', quiet=FALSE);
+    coverage  <- covr::package_coverage('./lightgbm_r', type = 'tests', quiet = FALSE);
     print(coverage);
     covr::report(coverage, file = file.path(getwd(), 'coverage.html'), browse = TRUE);
     "
@@ -241,14 +260,15 @@ For more information on this approach, see ["Writing R Extensions"](https://cran
 From the root of the repository, run the following.
 
 ```shell
+git submodule update --init --recursive
 sh build-cran-package.sh
 ```
 
 This will create a file `lightgbm_${VERSION}.tar.gz`, where `VERSION` is the version of `LightGBM`.
 
-Alternatively, GitHub Actions can generate this file for you. On a pull request, go to the "Files changed" tab and create a comment with this phrase:
+Alternatively, GitHub Actions can generate this file for you. On a pull request, create a comment with this phrase:
 
-> /gha build r-artifacts
+> /gha run build-r-artifacts
 
 Go to https://github.com/microsoft/LightGBM/actions, and find the most recent run of the "R artifact builds" workflow. If it ran successfully, you'll find a download link for the package (in `.zip` format) in that run's "Artifacts" section.
 
@@ -271,20 +291,20 @@ This section briefly explains the key files for building a CRAN package. To upda
 At build time, `configure` will be run and used to create a file `Makevars`, using `Makevars.in` as a template.
 
 1. Edit `configure.ac`.
-2. Create `configure` with `autoconf`. Do not edit it by hand. This file must be generated on Ubuntu 18.04.
+2. Create `configure` with `autoconf`. Do not edit it by hand. This file must be generated on Ubuntu 20.04.
 
-    If you have an Ubuntu 18.04 environment available, run the provided script from the root of the `LightGBM` repository.
+    If you have an Ubuntu 20.04 environment available, run the provided script from the root of the `LightGBM` repository.
 
     ```shell
     ./R-package/recreate-configure.sh
     ```
 
-    If you do not have easy access to an Ubuntu 18.04 environment, the `configure` script can be generated using Docker by running the code below from the root of this repo.
+    If you do not have easy access to an Ubuntu 20.04 environment, the `configure` script can be generated using Docker by running the code below from the root of this repo.
 
     ```shell
     docker run \
         -v $(pwd):/opt/LightGBM \
-        -t ubuntu:18.04 \
+        -t ubuntu:20.04 \
         /bin/bash -c "cd /opt/LightGBM && ./R-package/recreate-configure.sh"
     ```
 
@@ -333,6 +353,12 @@ rhub::check(
     )
 )
 ```
+
+Alternatively, GitHub Actions can run code above for you. On a pull request, create a comment with this phrase:
+
+> /gha run r-solaris
+
+**NOTE:** Please do this only once you see that other R tests on a pull request are passing. R Hub is a free resource with limited capacity, and we want to be respectful community members.
 
 #### UBSAN
 
@@ -390,7 +416,7 @@ RDvalgrind \
 | cat
 ```
 
-These tests can also be triggered on any pull request by leaving a review on the "Files changed" tab in a pull request:
+These tests can also be triggered on any pull request by leaving a comment in a pull request:
 
 > /gha run r-valgrind
 

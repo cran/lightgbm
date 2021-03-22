@@ -4,7 +4,7 @@
 #   * https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Configure-and-cleanup
 
 AC_PREREQ(2.69)
-AC_INIT([lightgbm], [3.1.1], [], [lightgbm], [])
+AC_INIT([lightgbm], [3.2.0], [], [lightgbm], [])
 
 ###########################
 # find compiler and flags #
@@ -25,6 +25,12 @@ CXX=`"${R_HOME}/bin/R" CMD config CXX11`
 
 # LightGBM-specific flags
 LGB_CPPFLAGS=""
+
+#########
+# Eigen #
+#########
+
+LGB_CPPFLAGS="${LGB_CPPFLAGS} -DEIGEN_MPL2_ONLY"
 
 ###############
 # MM_PREFETCH #
