@@ -16,7 +16,7 @@
 #include <vector>
 
 /*
- * Implements gradients and hessians for the following point losses.
+ * Implements gradients and Hessians for the following point losses.
  * Target y is anything in interval [0, 1].
  *
  * (1) CrossEntropy; "xentropy";
@@ -76,7 +76,7 @@ class CrossEntropy: public ObjectiveFunction {
 
   void GetGradients(const double* score, score_t* gradients, score_t* hessians) const override {
     if (weights_ == nullptr) {
-      // compute pointwise gradients and hessians with implied unit weights
+      // compute pointwise gradients and Hessians with implied unit weights
       #pragma omp parallel for schedule(static)
       for (data_size_t i = 0; i < num_data_; ++i) {
         const double z = 1.0f / (1.0f + std::exp(-score[i]));
@@ -84,7 +84,7 @@ class CrossEntropy: public ObjectiveFunction {
         hessians[i] = static_cast<score_t>(z * (1.0f - z));
       }
     } else {
-      // compute pointwise gradients and hessians with given weights
+      // compute pointwise gradients and Hessians with given weights
       #pragma omp parallel for schedule(static)
       for (data_size_t i = 0; i < num_data_; ++i) {
         const double z = 1.0f / (1.0f + std::exp(-score[i]));
@@ -189,7 +189,7 @@ class CrossEntropyLambda: public ObjectiveFunction {
 
   void GetGradients(const double* score, score_t* gradients, score_t* hessians) const override {
     if (weights_ == nullptr) {
-      // compute pointwise gradients and hessians with implied unit weights; exactly equivalent to CrossEntropy with unit weights
+      // compute pointwise gradients and Hessians with implied unit weights; exactly equivalent to CrossEntropy with unit weights
       #pragma omp parallel for schedule(static)
       for (data_size_t i = 0; i < num_data_; ++i) {
         const double z = 1.0f / (1.0f + std::exp(-score[i]));
@@ -197,13 +197,13 @@ class CrossEntropyLambda: public ObjectiveFunction {
         hessians[i] = static_cast<score_t>(z * (1.0f - z));
       }
     } else {
-      // compute pointwise gradients and hessians with given weights
+      // compute pointwise gradients and Hessians with given weights
       #pragma omp parallel for schedule(static)
       for (data_size_t i = 0; i < num_data_; ++i) {
         const double w = weights_[i];
         const double y = label_[i];
         const double epf = std::exp(score[i]);
-        const double hhat = std::log(1.0f + epf);
+        const double hhat = std::log1p(epf);
         const double z = 1.0f - std::exp(-w*hhat);
         const double enf = 1.0f / epf;  // = std::exp(-score[i]);
         gradients[i] = static_cast<score_t>((1.0f - y / z) * w / (1.0f + enf));
@@ -231,7 +231,7 @@ class CrossEntropyLambda: public ObjectiveFunction {
   //
 
   void ConvertOutput(const double* input, double* output) const override {
-    output[0] = std::log(1.0f + std::exp(input[0]));
+    output[0] = std::log1p(std::exp(input[0]));
   }
 
   std::string ToString() const override {
@@ -259,7 +259,7 @@ class CrossEntropyLambda: public ObjectiveFunction {
       }
     }
     double havg = suml / sumw;
-    double initscore = std::log(std::exp(havg) - 1.0f);
+    double initscore = std::log(std::expm1(havg));
     Log::Info("[%s:%s]: havg = %f -> initscore = %f",  GetName(), __func__, havg, initscore);
     return initscore;
   }

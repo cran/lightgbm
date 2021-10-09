@@ -71,17 +71,6 @@ class DCGCalculator {
   static void Init(const std::vector<double>& label_gain);
 
   /*!
-  * \brief Calculate the DCG score at position k
-  * \param k The position to evaluate
-  * \param label Pointer of label
-  * \param score Pointer of score
-  * \param num_data Number of data
-  * \return The DCG score
-  */
-  static double CalDCGAtK(data_size_t k, const label_t* label,
-    const double* score, data_size_t num_data);
-
-  /*!
   * \brief Calculate the DCG score at multi position
   * \param ks The positions to evaluate
   * \param label Pointer of label
@@ -105,14 +94,14 @@ class DCGCalculator {
 
 
   /*!
-  * \brief Check the metadata for NDCG and lambdarank
+  * \brief Check the metadata for NDCG and LambdaRank
   * \param metadata Metadata
   * \param num_queries Number of queries
   */
   static void CheckMetadata(const Metadata& metadata, data_size_t num_queries);
 
   /*!
-  * \brief Check the label range for NDCG and lambdarank
+  * \brief Check the label range for NDCG and LambdaRank
   * \param label Pointer of label
   * \param num_data Number of data
   */

@@ -15,9 +15,16 @@
 
 #include <LightGBM/export.h>
 
+#ifdef __cplusplus
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#else
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+#endif
 
 
 typedef void* DatasetHandle;  /*!< \brief Handle of dataset. */
@@ -53,7 +60,33 @@ LIGHTGBM_C_EXPORT const char* LGBM_GetLastError();
  */
 LIGHTGBM_C_EXPORT int LGBM_RegisterLogCallback(void (*callback)(const char*));
 
-// --- start Dataset interface
+/*!
+ * \brief Get number of samples based on parameters and total number of rows of data.
+ * \param num_total_row Number of total rows
+ * \param parameters Additional parameters, namely, ``bin_construct_sample_cnt`` is used to calculate returned value
+ * \param[out] out Number of samples. This value is used to pre-allocate memory to hold sample indices when calling ``LGBM_SampleIndices``
+ * \return 0 when succeed, -1 when failure happens
+ */
+LIGHTGBM_C_EXPORT int LGBM_GetSampleCount(int32_t num_total_row,
+                                          const char* parameters,
+                                          int* out);
+
+/*!
+ * \brief Create sample indices for total number of rows.
+ * \note
+ * You should pre-allocate memory for ``out``, you can get its length by ``LGBM_GetSampleCount``.
+ * \param num_total_row Number of total rows
+ * \param parameters Additional parameters, namely, ``bin_construct_sample_cnt`` and ``data_random_seed`` are used to produce the output
+ * \param[out] out Created indices, type is int32_t
+ * \param[out] out_len Number of indices
+ * \return 0 when succeed, -1 when failure happens
+ */
+LIGHTGBM_C_EXPORT int LGBM_SampleIndices(int32_t num_total_row,
+                                         const char* parameters,
+                                         void* out,
+                                         int32_t* out_len);
+
+/* --- start Dataset interface */
 
 /*!
  * \brief Load dataset from file (like LightGBM CLI version does).
@@ -398,7 +431,7 @@ LIGHTGBM_C_EXPORT int LGBM_DatasetGetNumFeature(DatasetHandle handle,
 LIGHTGBM_C_EXPORT int LGBM_DatasetAddFeaturesFrom(DatasetHandle target,
                                                   DatasetHandle source);
 
-// --- start Booster interfaces
+/* --- start Booster interfaces */
 
 /*!
 * \brief Get boolean representing whether booster is fitting linear trees.
@@ -575,24 +608,24 @@ LIGHTGBM_C_EXPORT int LGBM_BoosterNumberOfTotalModel(BoosterHandle handle,
                                                      int* out_models);
 
 /*!
- * \brief Get number of evaluation datasets.
+ * \brief Get number of evaluation metrics.
  * \param handle Handle of booster
- * \param[out] out_len Total number of evaluation datasets
+ * \param[out] out_len Total number of evaluation metrics
  * \return 0 when succeed, -1 when failure happens
  */
 LIGHTGBM_C_EXPORT int LGBM_BoosterGetEvalCounts(BoosterHandle handle,
                                                 int* out_len);
 
 /*!
- * \brief Get names of evaluation datasets.
+ * \brief Get names of evaluation metrics.
  * \param handle Handle of booster
  * \param len Number of ``char*`` pointers stored at ``out_strs``.
  *            If smaller than the max size, only this many strings are copied
- * \param[out] out_len Total number of evaluation datasets
+ * \param[out] out_len Total number of evaluation metrics
  * \param buffer_len Size of pre-allocated strings.
  *                   Content is copied up to ``buffer_len - 1`` and null-terminated
  * \param[out] out_buffer_len String sizes required to do the full string copies
- * \param[out] out_strs Names of evaluation datasets, should pre-allocate memory
+ * \param[out] out_strs Names of evaluation metrics, should pre-allocate memory
  * \return 0 when succeed, -1 when failure happens
  */
 LIGHTGBM_C_EXPORT int LGBM_BoosterGetEvalNames(BoosterHandle handle,
@@ -633,7 +666,7 @@ LIGHTGBM_C_EXPORT int LGBM_BoosterGetNumFeature(BoosterHandle handle,
 /*!
  * \brief Get evaluation for training data and validation data.
  * \note
- *   1. You should call ``LGBM_BoosterGetEvalNames`` first to get the names of evaluation datasets.
+ *   1. You should call ``LGBM_BoosterGetEvalNames`` first to get the names of evaluation metrics.
  *   2. You should pre-allocate memory for ``out_results``, you can get its length by ``LGBM_BoosterGetEvalCounts``.
  * \param handle Handle of booster
  * \param data_idx Index of data, 0: training data, 1: 1st validation data, 2: 2nd validation data and so on
@@ -1295,7 +1328,17 @@ LIGHTGBM_C_EXPORT int LGBM_NetworkInitWithFunctions(int num_machines,
                                                     void* reduce_scatter_ext_fun,
                                                     void* allgather_ext_fun);
 
-#if defined(_MSC_VER)
+#if !defined(__cplusplus) && (!defined(__STDC__) || (__STDC_VERSION__ < 199901L))
+#define INLINE_FUNCTION /*!< \brief inline specifier no-op in C using standards before C99. */
+#else
+#define INLINE_FUNCTION inline /*!< \brief Inline specifier. */
+#endif
+
+#if !defined(__cplusplus) && (!defined(__STDC__) || (__STDC_VERSION__ < 201112L))
+#define THREAD_LOCAL  /*!< \brief Thread local specifier no-op in C using standards before C11. */
+#elif !defined(__cplusplus)
+#define THREAD_LOCAL _Thread_local  /*!< \brief Thread local specifier. */
+#elif defined(_MSC_VER)
 #define THREAD_LOCAL __declspec(thread)  /*!< \brief Thread local specifier. */
 #else
 #define THREAD_LOCAL thread_local  /*!< \brief Thread local specifier. */
@@ -1314,9 +1357,9 @@ static char* LastErrorMsg() { static THREAD_LOCAL char err_msg[512] = "Everythin
  * \brief Set string message of the last error.
  * \param msg Error message
  */
-inline void LGBM_SetLastError(const char* msg) {
+INLINE_FUNCTION void LGBM_SetLastError(const char* msg) {
   const int err_buf_len = 512;
   snprintf(LastErrorMsg(), err_buf_len, "%s", msg);
 }
 
-#endif  // LIGHTGBM_C_API_H_
+#endif  /* LIGHTGBM_C_API_H_ */

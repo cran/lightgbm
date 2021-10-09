@@ -38,7 +38,6 @@
 #' @export
 lgb.importance <- function(model, percentage = TRUE) {
 
-  # Check if model is a lightgbm model
   if (!lgb.is.Booster(x = model)) {
     stop("'model' has to be an object of class lgb.Booster")
   }
@@ -75,6 +74,7 @@ lgb.importance <- function(model, percentage = TRUE) {
     )]
   }
 
-  return(tree_imp_dt)
+  # adding an empty [] to ensure the table is printed the first time print.data.table() is called
+  return(tree_imp_dt[])
 
 }

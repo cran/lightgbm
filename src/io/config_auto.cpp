@@ -14,6 +14,7 @@ const std::unordered_map<std::string, std::string>& Config::alias_table() {
   {"objective_type", "objective"},
   {"app", "objective"},
   {"application", "objective"},
+  {"loss", "objective"},
   {"boosting_type", "boosting"},
   {"boost", "boosting"},
   {"train", "data"},
@@ -34,11 +35,13 @@ const std::unordered_map<std::string, std::string>& Config::alias_table() {
   {"num_rounds", "num_iterations"},
   {"num_boost_round", "num_iterations"},
   {"n_estimators", "num_iterations"},
+  {"max_iter", "num_iterations"},
   {"shrinkage_rate", "learning_rate"},
   {"eta", "learning_rate"},
   {"num_leaf", "num_leaves"},
   {"max_leaves", "num_leaves"},
   {"max_leaf", "num_leaves"},
+  {"max_leaf_nodes", "num_leaves"},
   {"tree", "tree_learner"},
   {"tree_type", "tree_learner"},
   {"tree_learner_type", "tree_learner"},
@@ -53,6 +56,7 @@ const std::unordered_map<std::string, std::string>& Config::alias_table() {
   {"min_data_per_leaf", "min_data_in_leaf"},
   {"min_data", "min_data_in_leaf"},
   {"min_child_samples", "min_data_in_leaf"},
+  {"min_samples_leaf", "min_data_in_leaf"},
   {"min_sum_hessian_per_leaf", "min_sum_hessian_in_leaf"},
   {"min_sum_hessian", "min_sum_hessian_in_leaf"},
   {"min_hessian", "min_sum_hessian_in_leaf"},
@@ -72,19 +76,23 @@ const std::unordered_map<std::string, std::string>& Config::alias_table() {
   {"colsample_bytree", "feature_fraction"},
   {"sub_feature_bynode", "feature_fraction_bynode"},
   {"colsample_bynode", "feature_fraction_bynode"},
+  {"extra_tree", "extra_trees"},
   {"early_stopping_rounds", "early_stopping_round"},
   {"early_stopping", "early_stopping_round"},
   {"n_iter_no_change", "early_stopping_round"},
   {"max_tree_output", "max_delta_step"},
   {"max_leaf_output", "max_delta_step"},
   {"reg_alpha", "lambda_l1"},
+  {"l1_regularization", "lambda_l1"},
   {"reg_lambda", "lambda_l2"},
   {"lambda", "lambda_l2"},
+  {"l2_regularization", "lambda_l2"},
   {"min_split_gain", "min_gain_to_split"},
   {"rate_drop", "drop_rate"},
   {"topk", "top_k"},
   {"mc", "monotone_constraints"},
   {"monotone_constraint", "monotone_constraints"},
+  {"monotonic_cst", "monotone_constraints"},
   {"monotone_constraining_method", "monotone_constraints_method"},
   {"mc_method", "monotone_constraints_method"},
   {"monotone_splits_penalty", "monotone_penalty"},
@@ -104,6 +112,8 @@ const std::unordered_map<std::string, std::string>& Config::alias_table() {
   {"model_output", "output_model"},
   {"model_out", "output_model"},
   {"save_period", "snapshot_freq"},
+  {"linear_trees", "linear_tree"},
+  {"max_bins", "max_bin"},
   {"subsample_for_bin", "bin_construct_sample_cnt"},
   {"data_seed", "data_random_seed"},
   {"is_sparse", "is_enable_sparse"},
@@ -127,6 +137,7 @@ const std::unordered_map<std::string, std::string>& Config::alias_table() {
   {"cat_feature", "categorical_feature"},
   {"categorical_column", "categorical_feature"},
   {"cat_column", "categorical_feature"},
+  {"categorical_features", "categorical_feature"},
   {"is_save_binary", "save_binary"},
   {"is_save_binary_file", "save_binary"},
   {"is_predict_raw_score", "predict_raw_score"},
@@ -174,7 +185,6 @@ const std::unordered_set<std::string>& Config::parameter_set() {
   "task",
   "objective",
   "boosting",
-  "linear_tree",
   "data",
   "valid",
   "num_iterations",
@@ -239,6 +249,7 @@ const std::unordered_set<std::string>& Config::parameter_set() {
   "output_model",
   "saved_feature_importance_type",
   "snapshot_freq",
+  "linear_tree",
   "max_bin",
   "max_bin_by_feature",
   "min_data_in_bin",
@@ -259,6 +270,7 @@ const std::unordered_set<std::string>& Config::parameter_set() {
   "categorical_feature",
   "forcedbins_filename",
   "save_binary",
+  "precise_float_parser",
   "start_iteration_predict",
   "num_iteration_predict",
   "predict_raw_score",
@@ -306,8 +318,6 @@ const std::unordered_set<std::string>& Config::parameter_set() {
 
 void Config::GetMembersFromString(const std::unordered_map<std::string, std::string>& params) {
   std::string tmp_str = "";
-  GetBool(params, "linear_tree", &linear_tree);
-
   GetString(params, "data", &data);
 
   if (GetString(params, "valid", &tmp_str)) {
@@ -480,6 +490,8 @@ void Config::GetMembersFromString(const std::unordered_map<std::string, std::str
 
   GetInt(params, "snapshot_freq", &snapshot_freq);
 
+  GetBool(params, "linear_tree", &linear_tree);
+
   GetInt(params, "max_bin", &max_bin);
   CHECK_GT(max_bin, 1);
 
@@ -524,6 +536,8 @@ void Config::GetMembersFromString(const std::unordered_map<std::string, std::str
   GetString(params, "forcedbins_filename", &forcedbins_filename);
 
   GetBool(params, "save_binary", &save_binary);
+
+  GetBool(params, "precise_float_parser", &precise_float_parser);
 
   GetInt(params, "start_iteration_predict", &start_iteration_predict);
 
@@ -629,7 +643,6 @@ void Config::GetMembersFromString(const std::unordered_map<std::string, std::str
 
 std::string Config::SaveMembersToString() const {
   std::stringstream str_buf;
-  str_buf << "[linear_tree: " << linear_tree << "]\n";
   str_buf << "[data: " << data << "]\n";
   str_buf << "[valid: " << Common::Join(valid, ",") << "]\n";
   str_buf << "[num_iterations: " << num_iterations << "]\n";
@@ -688,6 +701,7 @@ std::string Config::SaveMembersToString() const {
   str_buf << "[interaction_constraints: " << interaction_constraints << "]\n";
   str_buf << "[verbosity: " << verbosity << "]\n";
   str_buf << "[saved_feature_importance_type: " << saved_feature_importance_type << "]\n";
+  str_buf << "[linear_tree: " << linear_tree << "]\n";
   str_buf << "[max_bin: " << max_bin << "]\n";
   str_buf << "[max_bin_by_feature: " << Common::Join(max_bin_by_feature, ",") << "]\n";
   str_buf << "[min_data_in_bin: " << min_data_in_bin << "]\n";
@@ -707,6 +721,7 @@ std::string Config::SaveMembersToString() const {
   str_buf << "[ignore_column: " << ignore_column << "]\n";
   str_buf << "[categorical_feature: " << categorical_feature << "]\n";
   str_buf << "[forcedbins_filename: " << forcedbins_filename << "]\n";
+  str_buf << "[precise_float_parser: " << precise_float_parser << "]\n";
   str_buf << "[objective_seed: " << objective_seed << "]\n";
   str_buf << "[num_class: " << num_class << "]\n";
   str_buf << "[is_unbalance: " << is_unbalance << "]\n";
