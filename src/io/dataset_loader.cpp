@@ -35,7 +35,7 @@ DatasetLoader::~DatasetLoader() {
 void DatasetLoader::SetHeader(const char* filename) {
   std::unordered_map<std::string, int> name2idx;
   std::string name_prefix("name:");
-  if (filename != nullptr) {
+  if (filename != nullptr && CheckCanLoadFromBin(filename) == "") {
     TextReader<data_size_t> text_reader(filename, config_.header);
 
     // get column names
@@ -837,6 +837,19 @@ void DatasetLoader::CheckDataset(const Dataset* dataset, bool is_load_from_binar
     } else {
       Log::Info("Recommend use integer for label index when loading data from binary for sanity check.");
     }
+
+    if (config_.label_column != "") {
+      Log::Warning("Config label_column works only in case of loading data directly from text file. It will be ignored when loading from binary file.");
+    }
+    if (config_.weight_column != "") {
+      Log::Warning("Config weight_column works only in case of loading data directly from text file. It will be ignored when loading from binary file.");
+    }
+    if (config_.group_column != "") {
+      Log::Warning("Config group_column works only in case of loading data directly from text file. It will be ignored when loading from binary file.");
+    }
+    if (config_.ignore_column != "") {
+      Log::Warning("Config ignore_column works only in case of loading data directly from text file. It will be ignored when loading from binary file.");
+    }
   }
 }
 
@@ -1143,7 +1156,7 @@ void DatasetLoader::ExtractFeaturesFromMemory(std::vector<std::string>* text_dat
   double tmp_label = 0.0f;
   auto& ref_text_data = *text_data;
   std::vector<float> feature_row(dataset->num_features_);
-  if (predict_fun_ == nullptr) {
+  if (!predict_fun_) {
     OMP_INIT_EX();
     // if doesn't need to prediction with initial model
     #pragma omp parallel for schedule(static) private(oneline_features) firstprivate(tmp_label, feature_row)
@@ -1262,7 +1275,7 @@ void DatasetLoader::ExtractFeaturesFromMemory(std::vector<std::string>* text_dat
 void DatasetLoader::ExtractFeaturesFromFile(const char* filename, const Parser* parser,
                                             const std::vector<data_size_t>& used_data_indices, Dataset* dataset) {
   std::vector<double> init_score;
-  if (predict_fun_ != nullptr) {
+  if (predict_fun_) {
     init_score = std::vector<double>(dataset->num_data_ * num_class_);
   }
   std::function<void(data_size_t, const std::vector<std::string>&)> process_fun =
