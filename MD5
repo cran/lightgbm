@@ -1,4 +1,4 @@
-e20d7609313dad31917ae896162fc32d *DESCRIPTION
+62a0c5260448977b6f0042c9133b6bbd *DESCRIPTION
 67927d7f2fe70fdfe9e23b525e3ae960 *LICENSE
 5c91905916c489ceea4e266766c42375 *NAMESPACE
 8700d0809f0f836b6a6a1624c19b0caa *R/aliases.R
@@ -20,11 +20,11 @@ ac80a862383bc50e12302bb12c2c30e2 *R/lgb.importance.R
 2d21a8a121994fa71ac5065f6345fb41 *R/readRDS.lgb.Booster.R
 bb3f0daa1f8cc723ef95fb3b18806912 *R/saveRDS.lgb.Booster.R
 2a14124cfdc6112703bf0c0070a958a1 *R/utils.R
-8c6fef31a1275113b407d4d891def150 *README.md
+60ad005f67f18e8bc9e32f96967a7580 *README.md
 6071edd604dbeb75308cfbedc7790398 *cleanup
-83e355fed2dca87c0a9cb5a305f130fc *configure
-6234fbf61a7047fe2d3dd6ab7b5a5cf0 *configure.ac
-9245418bbeed87395be5aec67d97865a *configure.win
+992ca0aa7e58f773347fca612ac20dec *configure
+dd97cdcfdc9b140596ee408ebe6d9368 *configure.ac
+2bafbb8b7cf5901e7a89078083206993 *configure.win
 05e29359ef24243df589703588987c0e *data/agaricus.test.rda
 9ebe1e11ce9d3bbc68acae073d6f2a21 *data/agaricus.train.rda
 69a8f2f3aed3a85cf0327ee43def6796 *data/bank.rda
@@ -407,7 +407,7 @@ f05300ca198debe2e3e304f7266c93ad *src/metric/multiclass_metric.hpp
 b672143d2ef10c2e2d67b65046ba8b39 *src/network/linkers_mpi.cpp
 d339bf3489b759c8f4be1c34af9fc608 *src/network/linkers_socket.cpp
 c42da7d39201dd68b410c4e95f155f0d *src/network/network.cpp
-4d15b5c0d015fe8a6f8b7d308427f59f *src/network/socket_wrapper.hpp
+b40c2d306fdd83bc98844eac1220ce67 *src/network/socket_wrapper.hpp
 add9d607fed37a938fa30e9ea9b18eb1 *src/objective/binary_objective.hpp
 ee4b4685ef7efde4970ca19954a2e6e5 *src/objective/multiclass_objective.hpp
 6e557805b37c1755195962130fcbfb58 *src/objective/objective_function.cpp
@@ -442,10 +442,11 @@ b0f25345a9f0f6c4775eb66affbef49a *src/treelearner/ocl/histogram64.cl
 f7abe1df13d79929d15d24f9741f7c12 *src/treelearner/tree_learner.cpp
 f5ba1a0e7f5b8a1d77d23bd4f808870e *src/treelearner/voting_parallel_tree_learner.cpp
 6af7e40f76de77684ccd8ec546dbbe2e *tests/testthat.R
+5a70d9aec2a21c7a97d26fb450fb256b *tests/testthat/Rplots.pdf
 a0253e578d712b65c8f4a761e6c21e94 *tests/testthat/test_Predictor.R
-c9eac3034b61314c55918939f74e9d43 *tests/testthat/test_basic.R
+3676ecd8bf5212a643eaea80d800cd79 *tests/testthat/test_basic.R
 7e027b5ca9f9ea97b8100bf9a4a876ad *tests/testthat/test_custom_objective.R
-57b54966c1eea3fa4289bbfc49bdc8c5 *tests/testthat/test_dataset.R
+f2c3bc6f839d9f63ca8102e0b8b0b7bd *tests/testthat/test_dataset.R
 5049d8b4e87fe4518e59aafb31d664e8 *tests/testthat/test_learning_to_rank.R
 be7b6feb9d9f2c96f2edbd6d0275a7de *tests/testthat/test_lgb.Booster.R
 c54cfbd183a4aeeeba0b6027200a5bee *tests/testthat/test_lgb.convert_with_rules.R
