@@ -1,8 +1,8 @@
 Package: lightgbm
 Type: Package
 Title: Light Gradient Boosting Machine
-Version: 3.3.3
-Date: 2022-10-10
+Version: 3.3.4
+Date: 2022-12-15
 Authors@R: c(
     person("Yu", "Shi", email = "yushi2@microsoft.com", role = c("aut", "cre")),
     person("Guolin", "Ke", email = "guolin.ke@outlook.com", role = c("aut")),
@@ -51,7 +51,7 @@ Imports: data.table (>= 1.9.6), graphics, jsonlite (>= 1.0), Matrix (>=
         1.1-0), methods, utils
 SystemRequirements: C++11
 RoxygenNote: 7.1.2
-Packaged: 2022-10-10 15:42:45 UTC; James.Lamb
+Packaged: 2022-12-15 20:11:29 UTC; James.Lamb
 Author: Yu Shi [aut, cre],
   Guolin Ke [aut],
   Damien Soukhavong [aut],
@@ -77,4 +77,4 @@ Author: Yu Shi [aut, cre],
   David Cortes [ctb]
 Maintainer: Yu Shi <yushi2@microsoft.com>
 Repository: CRAN
-Date/Publication: 2022-10-10 16:30:02 UTC
+Date/Publication: 2022-12-16 07:50:02 UTC

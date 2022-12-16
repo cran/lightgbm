@@ -1,4 +1,4 @@
-62a0c5260448977b6f0042c9133b6bbd *DESCRIPTION
+27ee9dfbfa1ef867342df1064a7df4d1 *DESCRIPTION
 67927d7f2fe70fdfe9e23b525e3ae960 *LICENSE
 5c91905916c489ceea4e266766c42375 *NAMESPACE
 8700d0809f0f836b6a6a1624c19b0caa *R/aliases.R
@@ -20,10 +20,10 @@ ac80a862383bc50e12302bb12c2c30e2 *R/lgb.importance.R
 2d21a8a121994fa71ac5065f6345fb41 *R/readRDS.lgb.Booster.R
 bb3f0daa1f8cc723ef95fb3b18806912 *R/saveRDS.lgb.Booster.R
 2a14124cfdc6112703bf0c0070a958a1 *R/utils.R
-60ad005f67f18e8bc9e32f96967a7580 *README.md
+6fda0ed259b954d81d457d1b7481900a *README.md
 6071edd604dbeb75308cfbedc7790398 *cleanup
-992ca0aa7e58f773347fca612ac20dec *configure
-dd97cdcfdc9b140596ee408ebe6d9368 *configure.ac
+bba86c360e5553178bfffe3b0b23ef50 *configure
+b7086f3dd47b68012827a037a5d46933 *configure.ac
 2bafbb8b7cf5901e7a89078083206993 *configure.win
 05e29359ef24243df589703588987c0e *data/agaricus.test.rda
 9ebe1e11ce9d3bbc68acae073d6f2a21 *data/agaricus.train.rda
@@ -364,7 +364,7 @@ db0aa21dc7bb118bcd8e6a215e45ac43 *src/include/LightGBM/utils/common.h
 83e91b332165117b44fcbc55df3aeffd *src/include/LightGBM/utils/common_legacy_solaris.h
 3d4726880ab3847c6ea516d4923d30d7 *src/include/LightGBM/utils/file_io.h
 49141d75a49a51c10d4cb889775514d6 *src/include/LightGBM/utils/json11.h
-36fead0ad5e4a109cbb886b3ab55af2f *src/include/LightGBM/utils/log.h
+15f8abe44f292b4030ac59d6aafb9094 *src/include/LightGBM/utils/log.h
 c25864505914631dc5af39d82326d85b *src/include/LightGBM/utils/openmp_wrapper.h
 a2fa56019282fa44652b8785d3fa4de0 *src/include/LightGBM/utils/pipeline_reader.h
 a1d467a8c76858cf7deadc49e55a7b75 *src/include/LightGBM/utils/random.h
@@ -442,7 +442,8 @@ b0f25345a9f0f6c4775eb66affbef49a *src/treelearner/ocl/histogram64.cl
 f7abe1df13d79929d15d24f9741f7c12 *src/treelearner/tree_learner.cpp
 f5ba1a0e7f5b8a1d77d23bd4f808870e *src/treelearner/voting_parallel_tree_learner.cpp
 6af7e40f76de77684ccd8ec546dbbe2e *tests/testthat.R
-5a70d9aec2a21c7a97d26fb450fb256b *tests/testthat/Rplots.pdf
+5bf48df30ab6e98bea16d18c297dd85b *tests/testthat/Rplots.pdf
+df9d0f9efad02c513dfe18962e96e932 *tests/testthat/lightgbm.model
 a0253e578d712b65c8f4a761e6c21e94 *tests/testthat/test_Predictor.R
 3676ecd8bf5212a643eaea80d800cd79 *tests/testthat/test_basic.R
 7e027b5ca9f9ea97b8100bf9a4a876ad *tests/testthat/test_custom_objective.R
