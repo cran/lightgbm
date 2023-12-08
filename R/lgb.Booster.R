@@ -9,6 +9,7 @@ Booster <- R6::R6Class(
     best_score = NA_real_,
     params = list(),
     record_evals = list(),
+    data_processor = NULL,
 
     # Finalize will free up the handles
     finalize = function() {
@@ -26,107 +27,90 @@ Booster <- R6::R6Class(
                           modelfile = NULL,
                           model_str = NULL) {
 
-      # Create parameters and handle
       handle <- NULL
 
-      # Attempts to create a handle for the dataset
-      try({
+      if (!is.null(train_set)) {
 
-        # Check if training dataset is not null
-        if (!is.null(train_set)) {
-          # Check if training dataset is lgb.Dataset or not
-          if (!lgb.is.Dataset(train_set)) {
-            stop("lgb.Booster: Can only use lgb.Dataset as training data")
-          }
-          train_set_handle <- train_set$.__enclos_env__$private$get_handle()
-          params <- utils::modifyList(params, train_set$get_params())
-          params_str <- lgb.params2str(params = params)
-          # Store booster handle
-          handle <- .Call(
-            LGBM_BoosterCreate_R
-            , train_set_handle
-            , params_str
-          )
+        if (!.is_Dataset(train_set)) {
+          stop("lgb.Booster: Can only use lgb.Dataset as training data")
+        }
+        train_set_handle <- train_set$.__enclos_env__$private$get_handle()
+        params <- utils::modifyList(params, train_set$get_params())
+        params_str <- .params2str(params = params)
+        # Store booster handle
+        handle <- .Call(
+          LGBM_BoosterCreate_R
+          , train_set_handle
+          , params_str
+        )
 
-          # Create private booster information
-          private$train_set <- train_set
-          private$train_set_version <- train_set$.__enclos_env__$private$version
-          private$num_dataset <- 1L
-          private$init_predictor <- train_set$.__enclos_env__$private$predictor
+        # Create private booster information
+        private$train_set <- train_set
+        private$train_set_version <- train_set$.__enclos_env__$private$version
+        private$num_dataset <- 1L
+        private$init_predictor <- train_set$.__enclos_env__$private$predictor
 
-          # Check if predictor is existing
-          if (!is.null(private$init_predictor)) {
+        if (!is.null(private$init_predictor)) {
 
-            # Merge booster
-            .Call(
-              LGBM_BoosterMerge_R
-              , handle
-              , private$init_predictor$.__enclos_env__$private$handle
-            )
-
-          }
-
-          # Check current iteration
-          private$is_predicted_cur_iter <- c(private$is_predicted_cur_iter, FALSE)
-
-        } else if (!is.null(modelfile)) {
-
-          # Do we have a model file as character?
-          if (!is.character(modelfile)) {
-            stop("lgb.Booster: Can only use a string as model file path")
-          }
-
-          modelfile <- path.expand(modelfile)
-
-          # Create booster from model
-          handle <- .Call(
-            LGBM_BoosterCreateFromModelfile_R
-            , modelfile
-          )
-
-        } else if (!is.null(model_str)) {
-
-          # Do we have a model_str as character?
-          if (!is.character(model_str)) {
-            stop("lgb.Booster: Can only use a string as model_str")
-          }
-
-          # Create booster from model
-          handle <- .Call(
-            LGBM_BoosterLoadModelFromString_R
-            , model_str
-          )
-
-        } else {
-
-          # Booster non existent
-          stop(
-            "lgb.Booster: Need at least either training dataset, "
-            , "model file, or model_str to create booster instance"
+          # Merge booster
+          .Call(
+            LGBM_BoosterMerge_R
+            , handle
+            , private$init_predictor$.__enclos_env__$private$handle
           )
 
         }
 
-      })
+        # Check current iteration
+        private$is_predicted_cur_iter <- c(private$is_predicted_cur_iter, FALSE)
 
-      # Check whether the handle was created properly if it was not stopped earlier by a stop call
-      if (isTRUE(lgb.is.null.handle(x = handle))) {
+      } else if (!is.null(modelfile)) {
 
-        stop("lgb.Booster: cannot create Booster handle")
+        # Do we have a model file as character?
+        if (!is.character(modelfile)) {
+          stop("lgb.Booster: Can only use a string as model file path")
+        }
+
+        modelfile <- path.expand(modelfile)
+
+        # Create booster from model
+        handle <- .Call(
+          LGBM_BoosterCreateFromModelfile_R
+          , modelfile
+        )
+        params <- private$get_loaded_param(handle)
+
+      } else if (!is.null(model_str)) {
+
+        # Do we have a model_str as character/raw?
+        if (!is.raw(model_str) && !is.character(model_str)) {
+          stop("lgb.Booster: Can only use a character/raw vector as model_str")
+        }
+
+        # Create booster from model
+        handle <- .Call(
+          LGBM_BoosterLoadModelFromString_R
+          , model_str
+        )
 
       } else {
 
-        # Create class
-        class(handle) <- "lgb.Booster.handle"
-        private$handle <- handle
-        private$num_class <- 1L
-        .Call(
-          LGBM_BoosterGetNumClasses_R
-          , private$handle
-          , private$num_class
+        # Booster non existent
+        stop(
+          "lgb.Booster: Need at least either training dataset, "
+          , "model file, or model_str to create booster instance"
         )
 
       }
+
+      class(handle) <- "lgb.Booster.handle"
+      private$handle <- handle
+      private$num_class <- 1L
+      .Call(
+        LGBM_BoosterGetNumClasses_R
+        , private$handle
+        , private$num_class
+      )
 
       self$params <- params
 
@@ -146,7 +130,7 @@ Booster <- R6::R6Class(
     # Add validation data
     add_valid = function(data, name) {
 
-      if (!lgb.is.Dataset(data)) {
+      if (!.is_Dataset(data)) {
         stop("lgb.Booster.add_valid: Can only use lgb.Dataset as validation data")
       }
 
@@ -177,24 +161,15 @@ Booster <- R6::R6Class(
 
     },
 
-    reset_parameter = function(params, ...) {
-
-      additional_params <- list(...)
-      if (length(additional_params) > 0L) {
-        warning(paste0(
-          "Booster$reset_parameter(): Found the following passed through '...': "
-          , paste(names(additional_params), collapse = ", ")
-          , ". These will be used, but in future releases of lightgbm, this warning will become an error. "
-          , "Add these to 'params' instead."
-        ))
-      }
+    reset_parameter = function(params) {
 
       if (methods::is(self$params, "list")) {
         params <- utils::modifyList(self$params, params)
       }
 
-      params <- utils::modifyList(params, additional_params)
-      params_str <- lgb.params2str(params = params)
+      params_str <- .params2str(params = params)
+
+      self$restore_handle()
 
       .Call(
         LGBM_BoosterResetParameter_R
@@ -218,7 +193,7 @@ Booster <- R6::R6Class(
 
       if (!is.null(train_set)) {
 
-        if (!lgb.is.Dataset(train_set)) {
+        if (!.is_Dataset(train_set)) {
           stop("lgb.Booster.update: Only can use lgb.Dataset as training data")
         }
 
@@ -258,12 +233,24 @@ Booster <- R6::R6Class(
           private$set_objective_to_none <- TRUE
         }
         # Perform objective calculation
-        gpair <- fobj(private$inner_predict(1L), private$train_set)
+        preds <- private$inner_predict(1L)
+        gpair <- fobj(preds, private$train_set)
 
         # Check for gradient and hessian as list
         if (is.null(gpair$grad) || is.null(gpair$hess)) {
           stop("lgb.Booster.update: custom objective should
             return a list with attributes (hess, grad)")
+        }
+
+        # Check grad and hess have the right shape
+        n_grad <- length(gpair$grad)
+        n_hess <- length(gpair$hess)
+        n_preds <- length(preds)
+        if (n_grad != n_preds) {
+          stop(sprintf("Expected custom objective function to return grad with length %d, got %d.", n_preds, n_grad))
+        }
+        if (n_hess != n_preds) {
+          stop(sprintf("Expected custom objective function to return hess with length %d, got %d.", n_preds, n_hess))
         }
 
         # Return custom boosting gradient/hessian
@@ -272,7 +259,7 @@ Booster <- R6::R6Class(
           , private$handle
           , gpair$grad
           , gpair$hess
-          , length(gpair$grad)
+          , n_preds
         )
 
       }
@@ -288,6 +275,8 @@ Booster <- R6::R6Class(
 
     # Return one iteration behind
     rollback_one_iter = function() {
+
+      self$restore_handle()
 
       .Call(
         LGBM_BoosterRollbackOneIter_R
@@ -306,6 +295,8 @@ Booster <- R6::R6Class(
     # Get current iteration
     current_iter = function() {
 
+      self$restore_handle()
+
       cur_iter <- 0L
       .Call(
         LGBM_BoosterGetCurrentIteration_R
@@ -318,6 +309,8 @@ Booster <- R6::R6Class(
 
     # Get upper bound
     upper_bound = function() {
+
+      self$restore_handle()
 
       upper_bound <- 0.0
       .Call(
@@ -332,6 +325,8 @@ Booster <- R6::R6Class(
     # Get lower bound
     lower_bound = function() {
 
+      self$restore_handle()
+
       lower_bound <- 0.0
       .Call(
         LGBM_BoosterGetLowerBoundValue_R
@@ -345,7 +340,7 @@ Booster <- R6::R6Class(
     # Evaluate data on metrics
     eval = function(data, name, feval = NULL) {
 
-      if (!lgb.is.Dataset(data)) {
+      if (!.is_Dataset(data)) {
         stop("lgb.Booster.eval: Can only use lgb.Dataset to eval")
       }
 
@@ -423,6 +418,8 @@ Booster <- R6::R6Class(
     # Save model
     save_model = function(filename, num_iteration = NULL, feature_importance_type = 0L) {
 
+      self$restore_handle()
+
       if (is.null(num_iteration)) {
         num_iteration <- self$best_iter
       }
@@ -440,7 +437,9 @@ Booster <- R6::R6Class(
       return(invisible(self))
     },
 
-    save_model_to_string = function(num_iteration = NULL, feature_importance_type = 0L) {
+    save_model_to_string = function(num_iteration = NULL, feature_importance_type = 0L, as_char = TRUE) {
+
+      self$restore_handle()
 
       if (is.null(num_iteration)) {
         num_iteration <- self$best_iter
@@ -453,12 +452,18 @@ Booster <- R6::R6Class(
           , as.integer(feature_importance_type)
       )
 
+      if (as_char) {
+        model_str <- rawToChar(model_str)
+      }
+
       return(model_str)
 
     },
 
     # Dump model in memory
     dump_model = function(num_iteration = NULL, feature_importance_type = 0L) {
+
+      self$restore_handle()
 
       if (is.null(num_iteration)) {
         num_iteration <- self$best_iter
@@ -483,19 +488,9 @@ Booster <- R6::R6Class(
                        predleaf = FALSE,
                        predcontrib = FALSE,
                        header = FALSE,
-                       reshape = FALSE,
-                       params = list(),
-                       ...) {
+                       params = list()) {
 
-      additional_params <- list(...)
-      if (length(additional_params) > 0L) {
-        warning(paste0(
-          "Booster$predict(): Found the following passed through '...': "
-          , paste(names(additional_params), collapse = ", ")
-          , ". These will be used, but in future releases of lightgbm, this warning will become an error. "
-          , "Add these to 'params' instead. See ?predict.lgb.Booster for documentation on how to call this function."
-        ))
-      }
+      self$restore_handle()
 
       if (is.null(num_iteration)) {
         num_iteration <- self$best_iter
@@ -505,11 +500,39 @@ Booster <- R6::R6Class(
         start_iteration <- 0L
       }
 
+      # possibly override keyword arguments with parameters
+      #
+      # NOTE: this length() check minimizes the latency introduced by these checks,
+      #       for the common case where params is empty
+      #
+      # NOTE: doing this here instead of in Predictor$predict() to keep
+      #       Predictor$predict() as fast as possible
+      if (length(params) > 0L) {
+        params <- .check_wrapper_param(
+          main_param_name = "predict_raw_score"
+          , params = params
+          , alternative_kwarg_value = rawscore
+        )
+        params <- .check_wrapper_param(
+          main_param_name = "predict_leaf_index"
+          , params = params
+          , alternative_kwarg_value = predleaf
+        )
+        params <- .check_wrapper_param(
+          main_param_name = "predict_contrib"
+          , params = params
+          , alternative_kwarg_value = predcontrib
+        )
+        rawscore <- params[["predict_raw_score"]]
+        predleaf <- params[["predict_leaf_index"]]
+        predcontrib <- params[["predict_contrib"]]
+      }
+
       # Predict on new data
-      params <- utils::modifyList(params, additional_params)
       predictor <- Predictor$new(
         modelfile = private$handle
         , params = params
+        , fast_predict_config = private$fast_predict_config
       )
       return(
         predictor$predict(
@@ -520,7 +543,6 @@ Booster <- R6::R6Class(
           , predleaf = predleaf
           , predcontrib = predcontrib
           , header = header
-          , reshape = reshape
         )
       )
 
@@ -531,17 +553,90 @@ Booster <- R6::R6Class(
       return(Predictor$new(modelfile = private$handle))
     },
 
-    # Used for save
-    raw = NA,
+    configure_fast_predict = function(csr = FALSE,
+                                      start_iteration = NULL,
+                                      num_iteration = NULL,
+                                      rawscore = FALSE,
+                                      predleaf = FALSE,
+                                      predcontrib = FALSE,
+                                      params = list()) {
 
-    # Save model to temporary file for in-memory saving
-    save = function() {
+      self$restore_handle()
+      ncols <- .Call(LGBM_BoosterGetNumFeature_R, private$handle)
 
-      # Overwrite model in object
-      self$raw <- self$save_model_to_string(NULL)
+      if (is.null(num_iteration)) {
+        num_iteration <- -1L
+      }
+      if (is.null(start_iteration)) {
+        start_iteration <- 0L
+      }
+
+      if (!csr) {
+        fun <- LGBM_BoosterPredictForMatSingleRowFastInit_R
+      } else {
+        fun <- LGBM_BoosterPredictForCSRSingleRowFastInit_R
+      }
+
+      fast_handle <- .Call(
+        fun
+        , private$handle
+        , ncols
+        , rawscore
+        , predleaf
+        , predcontrib
+        , start_iteration
+        , num_iteration
+        , .params2str(params = params)
+      )
+
+      private$fast_predict_config <- list(
+        handle = fast_handle
+        , csr = as.logical(csr)
+        , ncols = ncols
+        , start_iteration = start_iteration
+        , num_iteration = num_iteration
+        , rawscore = as.logical(rawscore)
+        , predleaf = as.logical(predleaf)
+        , predcontrib = as.logical(predcontrib)
+        , params = params
+      )
 
       return(invisible(NULL))
+    },
 
+    # Used for serialization
+    raw = NULL,
+
+    # Store serialized raw bytes in model object
+    save_raw = function() {
+      if (is.null(self$raw)) {
+        self$raw <- self$save_model_to_string(NULL, as_char = FALSE)
+      }
+      return(invisible(NULL))
+
+    },
+
+    drop_raw = function() {
+      self$raw <- NULL
+      return(invisible(NULL))
+    },
+
+    check_null_handle = function() {
+      return(.is_null_handle(private$handle))
+    },
+
+    restore_handle = function() {
+      if (self$check_null_handle()) {
+        if (is.null(self$raw)) {
+          .Call(LGBM_NullBoosterHandleError_R)
+        }
+        private$handle <- .Call(LGBM_BoosterLoadModelFromString_R, self$raw)
+      }
+      return(invisible(NULL))
+    },
+
+    get_handle = function() {
+      return(private$handle)
     }
 
   ),
@@ -560,6 +655,7 @@ Booster <- R6::R6Class(
     higher_better_inner_eval = NULL,
     set_objective_to_none = FALSE,
     train_set_version = 0L,
+    fast_predict_config = list(),
     # Predict data
     inner_predict = function(idx) {
 
@@ -633,12 +729,28 @@ Booster <- R6::R6Class(
 
     },
 
+    get_loaded_param = function(handle) {
+      params_str <- .Call(
+        LGBM_BoosterGetLoadedParam_R
+        , handle
+      )
+      params <- jsonlite::fromJSON(params_str)
+      if ("interaction_constraints" %in% names(params)) {
+        params[["interaction_constraints"]] <- lapply(params[["interaction_constraints"]], function(x) x + 1L)
+      }
+
+      return(params)
+
+    },
+
     inner_eval = function(data_name, data_idx, feval = NULL) {
 
       # Check for unknown dataset (over the maximum provided range)
       if (data_idx > private$num_dataset) {
         stop("data_idx should not be greater than num_dataset")
       }
+
+      self$restore_handle()
 
       private$get_eval_info()
 
@@ -688,8 +800,9 @@ Booster <- R6::R6Class(
         res <- feval(private$inner_predict(data_idx), data)
 
         if (is.null(res$name) || is.null(res$value) ||  is.null(res$higher_better)) {
-          stop("lgb.Booster.eval: custom eval function should return a
-            list with attribute (name, value, higher_better)");
+          stop(
+            "lgb.Booster.eval: custom eval function should return a list with attribute (name, value, higher_better)"
+          )
         }
 
         # Append names and evaluation
@@ -704,12 +817,35 @@ Booster <- R6::R6Class(
   )
 )
 
-#' @name predict.lgb.Booster
-#' @title Predict method for LightGBM model
-#' @description Predicted values based on class \code{lgb.Booster}
-#' @param object Object of class \code{lgb.Booster}
-#' @param data a \code{matrix} object, a \code{dgCMatrix} object or
-#'             a character representing a path to a text file (CSV, TSV, or LibSVM)
+#' @name lgb_predict_shared_params
+#' @param type Type of prediction to output. Allowed types are:\itemize{
+#'             \item \code{"response"}: will output the predicted score according to the objective function being
+#'                   optimized (depending on the link function that the objective uses), after applying any necessary
+#'                   transformations - for example, for \code{objective="binary"}, it will output class probabilities.
+#'             \item \code{"class"}: for classification objectives, will output the class with the highest predicted
+#'                   probability. For other objectives, will output the same as "response". Note that \code{"class"} is
+#'                   not a supported type for \link{lgb.configure_fast_predict} (see the documentation of that function
+#'                   for more details).
+#'             \item \code{"raw"}: will output the non-transformed numbers (sum of predictions from boosting iterations'
+#'                   results) from which the "response" number is produced for a given objective function - for example,
+#'                   for \code{objective="binary"}, this corresponds to log-odds. For many objectives such as
+#'                   "regression", since no transformation is applied, the output will be the same as for "response".
+#'             \item \code{"leaf"}: will output the index of the terminal node / leaf at which each observations falls
+#'                   in each tree in the model, outputted as integers, with one column per tree.
+#'             \item \code{"contrib"}: will return the per-feature contributions for each prediction, including an
+#'                   intercept (each feature will produce one column).
+#'             }
+#'
+#'             Note that, if using custom objectives, types "class" and "response" will not be available and will
+#'             default towards using "raw" instead.
+#'
+#'             If the model was fit through function \link{lightgbm} and it was passed a factor as labels,
+#'             passing the prediction type through \code{params} instead of through this argument might
+#'             result in factor levels for classification objectives not being applied correctly to the
+#'             resulting output.
+#'
+#'             \emph{New in version 4.0.0}
+#'
 #' @param start_iteration int or None, optional (default=None)
 #'                        Start index of the iteration to predict.
 #'                        If None or <= 0, starts from the first iteration.
@@ -718,29 +854,71 @@ Booster <- R6::R6Class(
 #'                      If None, if the best iteration exists and start_iteration is None or <= 0, the
 #'                      best iteration is used; otherwise, all iterations from start_iteration are used.
 #'                      If <= 0, all iterations from start_iteration are used (no limits).
-#' @param rawscore whether the prediction should be returned in the for of original untransformed
-#'                 sum of predictions from boosting iterations' results. E.g., setting \code{rawscore=TRUE}
-#'                 for logistic regression would result in predictions for log-odds instead of probabilities.
-#' @param predleaf whether predict leaf index instead.
-#' @param predcontrib return per-feature contributions for each record.
-#' @param header only used for prediction for text file. True if text file has header
-#' @param reshape whether to reshape the vector of predictions to a matrix form when there are several
-#'                prediction outputs per case.
 #' @param params a list of additional named parameters. See
 #'               \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html#predict-parameters}{
 #'               the "Predict Parameters" section of the documentation} for a list of parameters and
-#'               valid values.
-#' @param ... Additional prediction parameters. NOTE: deprecated as of v3.3.0. Use \code{params} instead.
-#' @return For regression or binary classification, it returns a vector of length \code{nrows(data)}.
-#'         For multiclass classification, either a \code{num_class * nrows(data)} vector or
-#'         a \code{(nrows(data), num_class)} dimension matrix is returned, depending on
-#'         the \code{reshape} value.
+#'               valid values. Where these conflict with the values of keyword arguments to this function,
+#'               the values in \code{params} take precedence.
+NULL
+
+#' @name predict.lgb.Booster
+#' @title Predict method for LightGBM model
+#' @description Predicted values based on class \code{lgb.Booster}
 #'
-#'         When \code{predleaf = TRUE}, the output is a matrix object with the
-#'         number of columns corresponding to the number of trees.
+#'              \emph{New in version 4.0.0}
 #'
+#' @details If the model object has been configured for fast single-row predictions through
+#'          \link{lgb.configure_fast_predict}, this function will use the prediction parameters
+#'          that were configured for it - as such, extra prediction parameters should not be passed
+#'          here, otherwise the configuration will be ignored and the slow route will be taken.
+#' @inheritParams lgb_predict_shared_params
+#' @param object Object of class \code{lgb.Booster}
+#' @param newdata a \code{matrix} object, a \code{dgCMatrix}, a \code{dgRMatrix} object, a \code{dsparseVector} object,
+#'                or a character representing a path to a text file (CSV, TSV, or LibSVM).
+#'
+#'                For sparse inputs, if predictions are only going to be made for a single row, it will be faster to
+#'                use CSR format, in which case the data may be passed as either a single-row CSR matrix (class
+#'                \code{dgRMatrix} from package \code{Matrix}) or as a sparse numeric vector (class
+#'                \code{dsparseVector} from package \code{Matrix}).
+#'
+#'                If single-row predictions are going to be performed frequently, it is recommended to
+#'                pre-configure the model object for fast single-row sparse predictions through function
+#'                \link{lgb.configure_fast_predict}.
+#'
+#'                \emph{Changed from 'data', in version 4.0.0}
+#'
+#' @param header only used for prediction for text file. True if text file has header
+#' @param ... ignored
+#' @return For prediction types that are meant to always return one output per observation (e.g. when predicting
+#'         \code{type="response"} or \code{type="raw"} on a binary classification or regression objective), will
+#'         return a vector with one element per row in \code{newdata}.
+#'
+#'         For prediction types that are meant to return more than one output per observation (e.g. when predicting
+#'         \code{type="response"} or \code{type="raw"} on a multi-class objective, or when predicting
+#'         \code{type="leaf"}, regardless of objective), will return a matrix with one row per observation in
+#'         \code{newdata} and one column per output.
+#'
+#'         For \code{type="leaf"} predictions, will return a matrix with one row per observation in \code{newdata}
+#'         and one column per tree. Note that for multiclass objectives, LightGBM trains one tree per class at each
+#'         boosting iteration. That means that, for example, for a multiclass model with 3 classes, the leaf
+#'         predictions for the first class can be found in columns 1, 4, 7, 10, etc.
+#'
+#'         For \code{type="contrib"}, will return a matrix of SHAP values with one row per observation in
+#'         \code{newdata} and columns corresponding to features. For regression, ranking, cross-entropy, and binary
+#'         classification objectives, this matrix contains one column per feature plus a final column containing the
+#'         Shapley base value. For multiclass objectives, this matrix will represent \code{num_classes} such matrices,
+#'         in the order "feature contributions for first class, feature contributions for second class, feature
+#'         contributions for third class, etc.".
+#'
+#'         If the model was fit through function \link{lightgbm} and it was passed a factor as labels, predictions
+#'         returned from this function will retain the factor levels (either as values for \code{type="class"}, or
+#'         as column names for \code{type="response"} and \code{type="raw"} for multi-class objectives). Note that
+#'         passing the requested prediction type under \code{params} instead of through \code{type} might result in
+#'         the factor levels not being present in the output.
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -752,6 +930,7 @@ Booster <- R6::R6Class(
 #'   , metric = "l2"
 #'   , min_data = 1L
 #'   , learning_rate = 1.0
+#'   , num_threads = 2L
 #' )
 #' valids <- list(test = dtest)
 #' model <- lgb.train(
@@ -774,44 +953,268 @@ Booster <- R6::R6Class(
 #' @importFrom utils modifyList
 #' @export
 predict.lgb.Booster <- function(object,
-                                data,
+                                newdata,
+                                type = "response",
                                 start_iteration = NULL,
                                 num_iteration = NULL,
-                                rawscore = FALSE,
-                                predleaf = FALSE,
-                                predcontrib = FALSE,
                                 header = FALSE,
-                                reshape = FALSE,
                                 params = list(),
                                 ...) {
 
-  if (!lgb.is.Booster(x = object)) {
+  if (!.is_Booster(x = object)) {
     stop("predict.lgb.Booster: object should be an ", sQuote("lgb.Booster"))
   }
 
   additional_params <- list(...)
   if (length(additional_params) > 0L) {
+    additional_params_names <- names(additional_params)
+    if ("reshape" %in% additional_params_names) {
+      stop("'reshape' argument is no longer supported.")
+    }
+
+    old_args_for_type <- list(
+      "rawscore" = "raw"
+      , "predleaf" = "leaf"
+      , "predcontrib" = "contrib"
+    )
+    for (arg in names(old_args_for_type)) {
+      if (arg %in% additional_params_names) {
+        stop(sprintf("Argument '%s' is no longer supported. Use type='%s' instead."
+                     , arg
+                     , old_args_for_type[[arg]]))
+      }
+    }
+
     warning(paste0(
       "predict.lgb.Booster: Found the following passed through '...': "
-      , paste(names(additional_params), collapse = ", ")
-      , ". These will be used, but in future releases of lightgbm, this warning will become an error. "
-      , "Add these to 'params' instead. See ?predict.lgb.Booster for documentation on how to call this function."
+      , toString(names(additional_params))
+      , ". These are ignored. Use argument 'params' instead."
     ))
   }
 
-  return(
-    object$predict(
-      data = data
-      , start_iteration = start_iteration
-      , num_iteration = num_iteration
-      , rawscore = rawscore
-      , predleaf =  predleaf
-      , predcontrib =  predcontrib
-      , header = header
-      , reshape = reshape
-      , params = utils::modifyList(params, additional_params)
-    )
+  if (!is.null(object$params$objective) && object$params$objective == "none" && type %in% c("class", "response")) {
+    warning("Prediction types 'class' and 'response' are not supported for custom objectives.")
+    type <- "raw"
+  }
+
+  rawscore <- FALSE
+  predleaf <- FALSE
+  predcontrib <- FALSE
+  if (type == "raw") {
+    rawscore <- TRUE
+  } else if (type == "leaf") {
+    predleaf <- TRUE
+  } else if (type == "contrib") {
+    predcontrib <- TRUE
+  }
+
+  pred <- object$predict(
+    data = newdata
+    , start_iteration = start_iteration
+    , num_iteration = num_iteration
+    , rawscore = rawscore
+    , predleaf =  predleaf
+    , predcontrib =  predcontrib
+    , header = header
+    , params = params
   )
+  if (type == "class") {
+    if (object$params$objective %in% .BINARY_OBJECTIVES()) {
+      pred <- as.integer(pred >= 0.5)
+    } else if (object$params$objective %in% .MULTICLASS_OBJECTIVES()) {
+      pred <- max.col(pred) - 1L
+    }
+  }
+  if (!is.null(object$data_processor)) {
+    pred <- object$data_processor$process_predictions(
+      pred = pred
+      , type = type
+    )
+  }
+  return(pred)
+}
+
+#' @title Configure Fast Single-Row Predictions
+#' @description Pre-configures a LightGBM model object to produce fast single-row predictions
+#'              for a given input data type, prediction type, and parameters.
+#' @details Calling this function multiple times with different parameters might not override
+#'          the previous configuration and might trigger undefined behavior.
+#'
+#'          Any saved configuration for fast predictions might be lost after making a single-row
+#'          prediction of a different type than what was configured (except for types "response" and
+#'          "class", which can be switched between each other at any time without losing the configuration).
+#'
+#'          In some situations, setting a fast prediction configuration for one type of prediction
+#'          might cause the prediction function to keep using that configuration for single-row
+#'          predictions even if the requested type of prediction is different from what was configured.
+#'
+#'          Note that this function will not accept argument \code{type="class"} - for such cases, one
+#'          can pass \code{type="response"} to this function and then \code{type="class"} to the
+#'          \code{predict} function - the fast configuration will not be lost or altered if the switch
+#'          is between "response" and "class".
+#'
+#'          The configuration does not survive de-serializations, so it has to be generated
+#'          anew in every R process that is going to use it (e.g. if loading a model object
+#'          through \code{readRDS}, whatever configuration was there previously will be lost).
+#'
+#'          Requesting a different prediction type or passing parameters to \link{predict.lgb.Booster}
+#'          will cause it to ignore the fast-predict configuration and take the slow route instead
+#'          (but be aware that an existing configuration might not always be overriden by supplying
+#'          different parameters or prediction type, so make sure to check that the output is what
+#'          was expected when a prediction is to be made on a single row for something different than
+#'          what is configured).
+#'
+#'          Note that, if configuring a non-default prediction type (such as leaf indices),
+#'          then that type must also be passed in the call to \link{predict.lgb.Booster} in
+#'          order for it to use the configuration. This also applies for \code{start_iteration}
+#'          and \code{num_iteration}, but \bold{the \code{params} list must be empty} in the call to \code{predict}.
+#'
+#'          Predictions about feature contributions do not allow a fast route for CSR inputs,
+#'          and as such, this function will produce an error if passing \code{csr=TRUE} and
+#'          \code{type = "contrib"} together.
+#' @inheritParams lgb_predict_shared_params
+#' @param model LighGBM model object (class \code{lgb.Booster}).
+#'
+#'              \bold{The object will be modified in-place}.
+#' @param csr Whether the prediction function is going to be called on sparse CSR inputs.
+#'            If \code{FALSE}, will be assumed that predictions are going to be called on single-row
+#'            regular R matrices.
+#' @return The same \code{model} that was passed as input, invisibly, with the desired
+#'         configuration stored inside it and available to be used in future calls to
+#'         \link{predict.lgb.Booster}.
+#' @examples
+#' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
+#' library(lightgbm)
+#' data(mtcars)
+#' X <- as.matrix(mtcars[, -1L])
+#' y <- mtcars[, 1L]
+#' dtrain <- lgb.Dataset(X, label = y, params = list(max_bin = 5L))
+#' params <- list(
+#'   min_data_in_leaf = 2L
+#'   , num_threads = 2L
+#' )
+#' model <- lgb.train(
+#'   params = params
+#'  , data = dtrain
+#'  , obj = "regression"
+#'  , nrounds = 5L
+#'  , verbose = -1L
+#' )
+#' lgb.configure_fast_predict(model)
+#'
+#' x_single <- X[11L, , drop = FALSE]
+#' predict(model, x_single)
+#'
+#' # Will not use it if the prediction to be made
+#' # is different from what was configured
+#' predict(model, x_single, type = "leaf")
+#' }
+#' @export
+lgb.configure_fast_predict <- function(model,
+                                       csr = FALSE,
+                                       start_iteration = NULL,
+                                       num_iteration = NULL,
+                                       type = "response",
+                                       params = list()) {
+  if (!.is_Booster(x = model)) {
+    stop("lgb.configure_fast_predict: model should be an ", sQuote("lgb.Booster"))
+  }
+  if (type == "class") {
+    stop("type='class' is not supported for 'lgb.configure_fast_predict'. Use 'response' instead.")
+  }
+
+  rawscore <- FALSE
+  predleaf <- FALSE
+  predcontrib <- FALSE
+  if (type == "raw") {
+    rawscore <- TRUE
+  } else if (type == "leaf") {
+    predleaf <- TRUE
+  } else if (type == "contrib") {
+    predcontrib <- TRUE
+  }
+
+  if (csr && predcontrib) {
+    stop("'lgb.configure_fast_predict' does not support feature contributions for CSR data.")
+  }
+  model$configure_fast_predict(
+    csr = csr
+    , start_iteration = start_iteration
+    , num_iteration = num_iteration
+    , rawscore = rawscore
+    , predleaf = predleaf
+    , predcontrib = predcontrib
+    , params = params
+  )
+  return(invisible(model))
+}
+
+#' @name print.lgb.Booster
+#' @title Print method for LightGBM model
+#' @description Show summary information about a LightGBM model object (same as \code{summary}).
+#'
+#'              \emph{New in version 4.0.0}
+#'
+#' @param x Object of class \code{lgb.Booster}
+#' @param ... Not used
+#' @return The same input \code{x}, returned as invisible.
+#' @export
+print.lgb.Booster <- function(x, ...) {
+  # nolint start
+  handle <- x$.__enclos_env__$private$handle
+  handle_is_null <- .is_null_handle(handle)
+
+  if (!handle_is_null) {
+    ntrees <- x$current_iter()
+    if (ntrees == 1L) {
+      cat("LightGBM Model (1 tree)\n")
+    } else {
+      cat(sprintf("LightGBM Model (%d trees)\n", ntrees))
+    }
+  } else {
+    cat("LightGBM Model\n")
+  }
+
+  if (!handle_is_null) {
+    obj <- x$params$objective
+    if (obj == "none") {
+      obj <- "custom"
+    }
+    num_class <- x$.__enclos_env__$private$num_class
+    if (num_class == 1L) {
+      cat(sprintf("Objective: %s\n", obj))
+    } else {
+      cat(sprintf("Objective: %s (%d classes)\n"
+          , obj
+          , num_class))
+    }
+  } else {
+    cat("(Booster handle is invalid)\n")
+  }
+
+  if (!handle_is_null) {
+    ncols <- .Call(LGBM_BoosterGetNumFeature_R, handle)
+    cat(sprintf("Fitted to dataset with %d columns\n", ncols))
+  }
+  # nolint end
+
+  return(invisible(x))
+}
+
+#' @name summary.lgb.Booster
+#' @title Summary method for LightGBM model
+#' @description Show summary information about a LightGBM model object (same as \code{print}).
+#'
+#'              \emph{New in version 4.0.0}
+#'
+#' @param object Object of class \code{lgb.Booster}
+#' @param ... Not used
+#' @return The same input \code{object}, returned as invisible.
+#' @export
+summary.lgb.Booster <- function(object, ...) {
+  print(object)
 }
 
 #' @name lgb.load
@@ -819,12 +1222,14 @@ predict.lgb.Booster <- function(object,
 #' @description Load LightGBM takes in either a file path or model string.
 #'              If both are provided, Load will default to loading from file
 #' @param filename path of model file
-#' @param model_str a str containing the model
+#' @param model_str a str containing the model (as a \code{character} or \code{raw} vector)
 #'
 #' @return lgb.Booster
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -836,6 +1241,7 @@ predict.lgb.Booster <- function(object,
 #'   , metric = "l2"
 #'   , min_data = 1L
 #'   , learning_rate = 1.0
+#'   , num_threads = 2L
 #' )
 #' valids <- list(test = dtest)
 #' model <- lgb.train(
@@ -869,8 +1275,8 @@ lgb.load <- function(filename = NULL, model_str = NULL) {
   }
 
   if (model_str_provided) {
-    if (!is.character(model_str)) {
-      stop("lgb.load: model_str should be character")
+    if (!is.raw(model_str) && !is.character(model_str)) {
+      stop("lgb.load: model_str should be a character/raw vector")
     }
     return(invisible(Booster$new(model_str = model_str)))
   }
@@ -889,6 +1295,8 @@ lgb.load <- function(filename = NULL, model_str = NULL) {
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' library(lightgbm)
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
@@ -901,6 +1309,7 @@ lgb.load <- function(filename = NULL, model_str = NULL) {
 #'   , metric = "l2"
 #'   , min_data = 1L
 #'   , learning_rate = 1.0
+#'   , num_threads = 2L
 #' )
 #' valids <- list(test = dtest)
 #' model <- lgb.train(
@@ -915,7 +1324,7 @@ lgb.load <- function(filename = NULL, model_str = NULL) {
 #' @export
 lgb.save <- function(booster, filename, num_iteration = NULL) {
 
-  if (!lgb.is.Booster(x = booster)) {
+  if (!.is_Booster(x = booster)) {
     stop("lgb.save: booster should be an ", sQuote("lgb.Booster"))
   }
 
@@ -945,6 +1354,8 @@ lgb.save <- function(booster, filename, num_iteration = NULL) {
 #' @examples
 #' \donttest{
 #' library(lightgbm)
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -956,6 +1367,7 @@ lgb.save <- function(booster, filename, num_iteration = NULL) {
 #'   , metric = "l2"
 #'   , min_data = 1L
 #'   , learning_rate = 1.0
+#'   , num_threads = 2L
 #' )
 #' valids <- list(test = dtest)
 #' model <- lgb.train(
@@ -970,8 +1382,8 @@ lgb.save <- function(booster, filename, num_iteration = NULL) {
 #' @export
 lgb.dump <- function(booster, num_iteration = NULL) {
 
-  if (!lgb.is.Booster(x = booster)) {
-    stop("lgb.save: booster should be an ", sQuote("lgb.Booster"))
+  if (!.is_Booster(x = booster)) {
+    stop("lgb.dump: booster should be an ", sQuote("lgb.Booster"))
   }
 
   # Return booster at requested iteration
@@ -994,6 +1406,8 @@ lgb.dump <- function(booster, num_iteration = NULL) {
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' # train a regression model
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
@@ -1006,6 +1420,7 @@ lgb.dump <- function(booster, num_iteration = NULL) {
 #'   , metric = "l2"
 #'   , min_data = 1L
 #'   , learning_rate = 1.0
+#'   , num_threads = 2L
 #' )
 #' valids <- list(test = dtest)
 #' model <- lgb.train(
@@ -1027,7 +1442,7 @@ lgb.dump <- function(booster, num_iteration = NULL) {
 #' @export
 lgb.get.eval.result <- function(booster, data_name, eval_name, iters = NULL, is_err = FALSE) {
 
-  if (!lgb.is.Booster(x = booster)) {
+  if (!.is_Booster(x = booster)) {
     stop("lgb.get.eval.result: Can only use ", sQuote("lgb.Booster"), " to get eval result")
   }
 
@@ -1042,7 +1457,7 @@ lgb.get.eval.result <- function(booster, data_name, eval_name, iters = NULL, is_
       "lgb.get.eval.result: data_name "
       , shQuote(data_name)
       , " not found. Only the following datasets exist in record evals: ["
-      , paste(data_names, collapse = ", ")
+      , toString(data_names)
       , "]"
     ))
   }
@@ -1056,10 +1471,9 @@ lgb.get.eval.result <- function(booster, data_name, eval_name, iters = NULL, is_
       , " not found. Only the following eval_names exist for dataset "
       , shQuote(data_name)
       , ": ["
-      , paste(eval_names, collapse = ", ")
+      , toString(eval_names)
       , "]"
     ))
-    stop("lgb.get.eval.result: wrong eval name")
   }
 
   result <- booster$record_evals[[data_name]][[eval_name]][[.EVAL_KEY()]]

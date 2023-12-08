@@ -5,14 +5,12 @@
 \alias{slice.lgb.Dataset}
 \title{Slice a dataset}
 \usage{
-slice(dataset, ...)
+slice(dataset, idxset)
 
-\method{slice}{lgb.Dataset}(dataset, idxset, ...)
+\method{slice}{lgb.Dataset}(dataset, idxset)
 }
 \arguments{
 \item{dataset}{Object of class \code{lgb.Dataset}}
-
-\item{...}{other parameters (currently not used)}
 
 \item{idxset}{an integer vector of indices of rows needed}
 }
@@ -25,6 +23,8 @@ Get a new \code{lgb.Dataset} containing the specified rows of
 }
 \examples{
 \donttest{
+\dontshow{setLGBMthreads(2L)}
+\dontshow{data.table::setDTthreads(1L)}
 data(agaricus.train, package = "lightgbm")
 train <- agaricus.train
 dtrain <- lgb.Dataset(train$data, label = train$label)

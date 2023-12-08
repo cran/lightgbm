@@ -5,9 +5,7 @@
 #ifndef LIGHTGBM_UTILS_COMMON_H_
 #define LIGHTGBM_UTILS_COMMON_H_
 
-#if ((defined(sun) || defined(__sun)) && (defined(__SVR4) || defined(__svr4__)))
-#include <LightGBM/utils/common_legacy_solaris.h>
-#endif
+#include <LightGBM/utils/json11.h>
 #include <LightGBM/utils/log.h>
 #include <LightGBM/utils/openmp_wrapper.h>
 
@@ -31,11 +29,9 @@
 #include <utility>
 #include <vector>
 
-#if (!((defined(sun) || defined(__sun)) && (defined(__SVR4) || defined(__svr4__))))
 #define FMT_HEADER_ONLY
-#include "LightGBM/fmt/format.h"
-#endif
 #include "LightGBM/fast_double_parser.h"
+#include "LightGBM/fmt/format.h"
 
 #ifdef _MSC_VER
 #include <intrin.h>
@@ -61,6 +57,8 @@
 namespace LightGBM {
 
 namespace Common {
+
+using json11_internal_lightgbm::Json;
 
 /*!
 * Imbues the stream with the C locale.
@@ -198,6 +196,28 @@ inline static std::vector<std::string> Split(const char* c_str, const char* deli
     ret.push_back(str.substr(i));
   }
   return ret;
+}
+
+inline static std::string GetFromParserConfig(std::string config_str, std::string key) {
+  // parser config should follow json format.
+  std::string err;
+  Json config_json = Json::parse(config_str, &err);
+  if (!err.empty()) {
+    Log::Fatal("Invalid parser config: %s. Please check if follow json format.", err.c_str());
+  }
+  return config_json[key].string_value();
+}
+
+inline static std::string SaveToParserConfig(std::string config_str, std::string key, std::string value) {
+  std::string err;
+  Json config_json = Json::parse(config_str, &err);
+  if (!err.empty()) {
+    Log::Fatal("Invalid parser config: %s. Please check if follow json format.", err.c_str());
+  }
+  CHECK(config_json.is_object());
+  std::map<std::string, Json> config_map = config_json.object_items();
+  config_map.insert(std::pair<std::string, Json>(key, Json(value)));
+  return Json(config_map).dump();
 }
 
 template<typename T>
@@ -671,7 +691,7 @@ static void ParallelSort(_RanIt _First, _RanIt _Last, _Pr _Pred, _VTRanIt*) {
   size_t inner_size = (len + num_threads - 1) / num_threads;
   inner_size = std::max(inner_size, kMinInnerLen);
   num_threads = static_cast<int>((len + inner_size - 1) / inner_size);
-#pragma omp parallel for schedule(static, 1)
+#pragma omp parallel for num_threads(num_threads) schedule(static, 1)
   for (int i = 0; i < num_threads; ++i) {
     size_t left = inner_size*i;
     size_t right = left + inner_size;
@@ -687,7 +707,7 @@ static void ParallelSort(_RanIt _First, _RanIt _Last, _Pr _Pred, _VTRanIt*) {
   // Recursive merge
   while (s < len) {
     int loop_size = static_cast<int>((len + s * 2 - 1) / (s * 2));
-    #pragma omp parallel for schedule(static, 1)
+    #pragma omp parallel for num_threads(num_threads) schedule(static, 1)
     for (int i = 0; i < loop_size; ++i) {
       size_t left = i * 2 * s;
       size_t mid = left + s;
@@ -1170,7 +1190,6 @@ inline static std::vector<T> StringToArray(const std::string& str, char delimite
   return ret;
 }
 
-#if (!((defined(sun) || defined(__sun)) && (defined(__SVR4) || defined(__svr4__))))
 /*!
 * Safely formats a value onto a buffer according to a format string and null-terminates it.
 *
@@ -1235,7 +1254,6 @@ inline static std::string ArrayToString(const std::vector<T>& arr, size_t n) {
   }
   return str_buf.str();
 }
-#endif  // (!((defined(sun) || defined(__sun)) && (defined(__SVR4) || defined(__svr4__))))
 
 
 }  // namespace CommonC

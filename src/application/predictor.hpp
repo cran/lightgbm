@@ -8,6 +8,7 @@
 #include <LightGBM/boosting.h>
 #include <LightGBM/dataset.h>
 #include <LightGBM/meta.h>
+#include <LightGBM/utils/common.h>
 #include <LightGBM/utils/openmp_wrapper.h>
 #include <LightGBM/utils/text_reader.h>
 
@@ -167,7 +168,7 @@ class Predictor {
     }
     auto label_idx = header ? -1 : boosting_->LabelIdx();
     auto parser = std::unique_ptr<Parser>(Parser::CreateParser(data_filename, header, boosting_->MaxFeatureIdx() + 1, label_idx,
-                                                               precise_float_parser));
+                                                               precise_float_parser, boosting_->ParserConfigStr()));
 
     if (parser == nullptr) {
       Log::Fatal("Could not recognize the data format of data file %s", data_filename);
@@ -179,7 +180,8 @@ class Predictor {
     TextReader<data_size_t> predict_data_reader(data_filename, header);
     std::vector<int> feature_remapper(parser->NumFeatures(), -1);
     bool need_adjust = false;
-    if (header) {
+    // skip raw feature remapping if trained model has parser config str which may contain actual feature names.
+    if (header && boosting_->ParserConfigStr().empty()) {
       std::string first_line = predict_data_reader.first_line();
       std::vector<std::string> header_words = Common::Split(first_line.c_str(), "\t,");
       std::unordered_map<std::string, int> header_mapper;
@@ -231,7 +233,7 @@ class Predictor {
       std::vector<std::pair<int, double>> oneline_features;
       std::vector<std::string> result_to_write(lines.size());
       OMP_INIT_EX();
-      #pragma omp parallel for schedule(static) firstprivate(oneline_features)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) firstprivate(oneline_features)
       for (data_size_t i = 0; i < static_cast<data_size_t>(lines.size()); ++i) {
         OMP_LOOP_EX_BEGIN();
         oneline_features.clear();

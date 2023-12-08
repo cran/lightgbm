@@ -2,7 +2,7 @@
 % Please edit documentation in R/readRDS.lgb.Booster.R
 \name{readRDS.lgb.Booster}
 \alias{readRDS.lgb.Booster}
-\title{readRDS for \code{lgb.Booster} models}
+\title{readRDS for \code{lgb.Booster} models (DEPRECATED)}
 \usage{
 readRDS.lgb.Booster(file, refhook = NULL)
 }
@@ -15,11 +15,16 @@ readRDS.lgb.Booster(file, refhook = NULL)
 \code{lgb.Booster}
 }
 \description{
-Attempts to load a model stored in a \code{.rds} file, using \code{\link[base]{readRDS}}
+Calls \code{readRDS} in what is expected to be a serialized \code{lgb.Booster} object,
+             and then restores its handle through \code{lgb.restore_handle}.
+
+             \bold{This function throws a warning and will be removed in future versions.}
 }
 \examples{
 \donttest{
 library(lightgbm)
+\dontshow{setLGBMthreads(2L)}
+\dontshow{data.table::setDTthreads(1L)}
 data(agaricus.train, package = "lightgbm")
 train <- agaricus.train
 dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -31,6 +36,7 @@ params <- list(
   , metric = "l2"
   , min_data = 1L
   , learning_rate = 1.0
+  , num_threads = 2L
 )
 valids <- list(test = dtest)
 model <- lgb.train(

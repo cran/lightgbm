@@ -18,10 +18,12 @@
 
 #include <string>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <utility>
 #include <vector>
+#include <algorithm>
 
 #define COL_MAJOR (0)
 
@@ -38,7 +40,7 @@ void LGBM_R_save_exception_msg(const std::string &err);
   catch(std::exception& ex) { LGBM_R_save_exception_msg(ex); } \
   catch(std::string& ex) { LGBM_R_save_exception_msg(ex); } \
   catch(...) { Rf_error("unknown exception"); } \
-  Rf_error(R_errmsg_buffer); \
+  Rf_error("%s", R_errmsg_buffer); \
   return R_NilValue; /* <- won't be reached */
 
 #define CHECK_CALL(x) \
@@ -60,6 +62,18 @@ SEXP wrapped_R_string(void *len) {
   return Rf_allocVector(STRSXP, *(reinterpret_cast<R_xlen_t*>(len)));
 }
 
+SEXP wrapped_R_raw(void *len) {
+  return Rf_allocVector(RAWSXP, *(reinterpret_cast<R_xlen_t*>(len)));
+}
+
+SEXP wrapped_R_int(void *len) {
+  return Rf_allocVector(INTSXP, *(reinterpret_cast<R_xlen_t*>(len)));
+}
+
+SEXP wrapped_R_real(void *len) {
+  return Rf_allocVector(REALSXP, *(reinterpret_cast<R_xlen_t*>(len)));
+}
+
 SEXP wrapped_Rf_mkChar(void *txt) {
   return Rf_mkChar(reinterpret_cast<char*>(txt));
 }
@@ -73,6 +87,18 @@ void throw_R_memerr(void *ptr_cont_token, Rboolean jump) {
 
 SEXP safe_R_string(R_xlen_t len, SEXP *cont_token) {
   return R_UnwindProtect(wrapped_R_string, reinterpret_cast<void*>(&len), throw_R_memerr, cont_token, *cont_token);
+}
+
+SEXP safe_R_raw(R_xlen_t len, SEXP *cont_token) {
+  return R_UnwindProtect(wrapped_R_raw, reinterpret_cast<void*>(&len), throw_R_memerr, cont_token, *cont_token);
+}
+
+SEXP safe_R_int(R_xlen_t len, SEXP *cont_token) {
+  return R_UnwindProtect(wrapped_R_int, reinterpret_cast<void*>(&len), throw_R_memerr, cont_token, *cont_token);
+}
+
+SEXP safe_R_real(R_xlen_t len, SEXP *cont_token) {
+  return R_UnwindProtect(wrapped_R_real, reinterpret_cast<void*>(&len), throw_R_memerr, cont_token, *cont_token);
 }
 
 SEXP safe_R_mkChar(char *txt, SEXP *cont_token) {
@@ -90,12 +116,17 @@ void _DatasetFinalizer(SEXP handle) {
   LGBM_DatasetFree_R(handle);
 }
 
+SEXP LGBM_NullBoosterHandleError_R() {
+  Rf_error(
+      "Attempting to use a Booster which no longer exists and/or cannot be restored. "
+      "This can happen if you have called Booster$finalize() "
+      "or if this Booster was saved through saveRDS() using 'serializable=FALSE'.");
+  return R_NilValue;
+}
+
 void _AssertBoosterHandleNotNull(SEXP handle) {
   if (Rf_isNull(handle) || !R_ExternalPtrAddr(handle)) {
-    Rf_error(
-      "Attempting to use a Booster which no longer exists. "
-      "This can happen if you have called Booster$finalize() or if this Booster was saved with saveRDS(). "
-      "To avoid this error in the future, use saveRDS.lgb.Booster() or Booster$save_model() to save lightgbm Boosters.");
+    LGBM_NullBoosterHandleError_R();
   }
 }
 
@@ -195,9 +226,10 @@ SEXP LGBM_DatasetGetSubset_R(SEXP handle,
   int32_t len = static_cast<int32_t>(Rf_asInteger(len_used_row_indices));
   std::vector<int32_t> idxvec(len);
   // convert from one-based to zero-based index
-#pragma omp parallel for schedule(static, 512) if (len >= 1024)
+  const int *used_row_indices_ = INTEGER(used_row_indices);
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (len >= 1024)
   for (int32_t i = 0; i < len; ++i) {
-    idxvec[i] = static_cast<int32_t>(INTEGER(used_row_indices)[i] - 1);
+    idxvec[i] = static_cast<int32_t>(used_row_indices_[i] - 1);
   }
   const char* parameters_ptr = CHAR(PROTECT(Rf_asChar(parameters)));
   DatasetHandle res = nullptr;
@@ -308,18 +340,20 @@ SEXP LGBM_DatasetSetField_R(SEXP handle,
   const char* name = CHAR(PROTECT(Rf_asChar(field_name)));
   if (!strcmp("group", name) || !strcmp("query", name)) {
     std::vector<int32_t> vec(len);
-#pragma omp parallel for schedule(static, 512) if (len >= 1024)
+    const int *field_data_ = INTEGER(field_data);
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (len >= 1024)
     for (int i = 0; i < len; ++i) {
-      vec[i] = static_cast<int32_t>(INTEGER(field_data)[i]);
+      vec[i] = static_cast<int32_t>(field_data_[i]);
     }
     CHECK_CALL(LGBM_DatasetSetField(R_ExternalPtrAddr(handle), name, vec.data(), len, C_API_DTYPE_INT32));
   } else if (!strcmp("init_score", name)) {
     CHECK_CALL(LGBM_DatasetSetField(R_ExternalPtrAddr(handle), name, REAL(field_data), len, C_API_DTYPE_FLOAT64));
   } else {
     std::vector<float> vec(len);
-#pragma omp parallel for schedule(static, 512) if (len >= 1024)
+    const double *field_data_ = REAL(field_data);
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (len >= 1024)
     for (int i = 0; i < len; ++i) {
-      vec[i] = static_cast<float>(REAL(field_data)[i]);
+      vec[i] = static_cast<float>(field_data_[i]);
     }
     CHECK_CALL(LGBM_DatasetSetField(R_ExternalPtrAddr(handle), name, vec.data(), len, C_API_DTYPE_FLOAT32));
   }
@@ -341,21 +375,24 @@ SEXP LGBM_DatasetGetField_R(SEXP handle,
   if (!strcmp("group", name) || !strcmp("query", name)) {
     auto p_data = reinterpret_cast<const int32_t*>(res);
     // convert from boundaries to size
-#pragma omp parallel for schedule(static, 512) if (out_len >= 1024)
+    int *field_data_ = INTEGER(field_data);
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (out_len >= 1024)
     for (int i = 0; i < out_len - 1; ++i) {
-      INTEGER(field_data)[i] = p_data[i + 1] - p_data[i];
+      field_data_[i] = p_data[i + 1] - p_data[i];
     }
   } else if (!strcmp("init_score", name)) {
     auto p_data = reinterpret_cast<const double*>(res);
-#pragma omp parallel for schedule(static, 512) if (out_len >= 1024)
+    double *field_data_ = REAL(field_data);
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (out_len >= 1024)
     for (int i = 0; i < out_len; ++i) {
-      REAL(field_data)[i] = p_data[i];
+      field_data_[i] = p_data[i];
     }
   } else {
     auto p_data = reinterpret_cast<const float*>(res);
-#pragma omp parallel for schedule(static, 512) if (out_len >= 1024)
+    double *field_data_ = REAL(field_data);
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (out_len >= 1024)
     for (int i = 0; i < out_len; ++i) {
-      REAL(field_data)[i] = p_data[i];
+      field_data_[i] = p_data[i];
     }
   }
   UNPROTECT(1);
@@ -414,6 +451,17 @@ SEXP LGBM_DatasetGetNumFeature_R(SEXP handle,
   R_API_END();
 }
 
+SEXP LGBM_DatasetGetFeatureNumBin_R(SEXP handle, SEXP feature_idx, SEXP out) {
+  R_API_BEGIN();
+  _AssertDatasetHandleNotNull(handle);
+  int feature = Rf_asInteger(feature_idx);
+  int nbins;
+  CHECK_CALL(LGBM_DatasetGetFeatureNumBin(R_ExternalPtrAddr(handle), feature, &nbins));
+  INTEGER(out)[0] = nbins;
+  return R_NilValue;
+  R_API_END();
+}
+
 // --- start Booster interfaces
 
 void _BoosterFinalizer(SEXP handle) {
@@ -462,13 +510,30 @@ SEXP LGBM_BoosterCreateFromModelfile_R(SEXP filename) {
 SEXP LGBM_BoosterLoadModelFromString_R(SEXP model_str) {
   R_API_BEGIN();
   SEXP ret = PROTECT(R_MakeExternalPtr(nullptr, R_NilValue, R_NilValue));
+  SEXP temp = NULL;
+  int n_protected = 1;
   int out_num_iterations = 0;
-  const char* model_str_ptr = CHAR(PROTECT(Rf_asChar(model_str)));
+  const char* model_str_ptr = nullptr;
+  switch (TYPEOF(model_str)) {
+    case RAWSXP: {
+      model_str_ptr = reinterpret_cast<const char*>(RAW(model_str));
+      break;
+    }
+    case CHARSXP: {
+      model_str_ptr = reinterpret_cast<const char*>(CHAR(model_str));
+      break;
+    }
+    case STRSXP: {
+      temp = PROTECT(STRING_ELT(model_str, 0));
+      n_protected++;
+      model_str_ptr = reinterpret_cast<const char*>(CHAR(temp));
+    }
+  }
   BoosterHandle handle = nullptr;
   CHECK_CALL(LGBM_BoosterLoadModelFromString(model_str_ptr, &out_num_iterations, &handle));
   R_SetExternalPtrAddr(ret, handle);
   R_RegisterCFinalizerEx(ret, _BoosterFinalizer, TRUE);
-  UNPROTECT(2);
+  UNPROTECT(n_protected);
   return ret;
   R_API_END();
 }
@@ -525,6 +590,15 @@ SEXP LGBM_BoosterGetNumClasses_R(SEXP handle,
   R_API_END();
 }
 
+SEXP LGBM_BoosterGetNumFeature_R(SEXP handle) {
+  R_API_BEGIN();
+  _AssertBoosterHandleNotNull(handle);
+  int out = 0;
+  CHECK_CALL(LGBM_BoosterGetNumFeature(R_ExternalPtrAddr(handle), &out));
+  return Rf_ScalarInteger(out);
+  R_API_END();
+}
+
 SEXP LGBM_BoosterUpdateOneIter_R(SEXP handle) {
   R_API_BEGIN();
   _AssertBoosterHandleNotNull(handle);
@@ -543,10 +617,12 @@ SEXP LGBM_BoosterUpdateOneIterCustom_R(SEXP handle,
   int is_finished = 0;
   int int_len = Rf_asInteger(len);
   std::vector<float> tgrad(int_len), thess(int_len);
-#pragma omp parallel for schedule(static, 512) if (int_len >= 1024)
+  const double *grad_ = REAL(grad);
+  const double *hess_ = REAL(hess);
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (int_len >= 1024)
   for (int j = 0; j < int_len; ++j) {
-    tgrad[j] = static_cast<float>(REAL(grad)[j]);
-    thess[j] = static_cast<float>(REAL(hess)[j]);
+    tgrad[j] = static_cast<float>(grad_[j]);
+    thess[j] = static_cast<float>(hess_[j]);
   }
   CHECK_CALL(LGBM_BoosterUpdateOneIterCustom(R_ExternalPtrAddr(handle), tgrad.data(), thess.data(), &is_finished));
   return R_NilValue;
@@ -772,6 +848,109 @@ SEXP LGBM_BoosterPredictForCSC_R(SEXP handle,
   R_API_END();
 }
 
+SEXP LGBM_BoosterPredictForCSR_R(SEXP handle,
+  SEXP indptr,
+  SEXP indices,
+  SEXP data,
+  SEXP ncols,
+  SEXP is_rawscore,
+  SEXP is_leafidx,
+  SEXP is_predcontrib,
+  SEXP start_iteration,
+  SEXP num_iteration,
+  SEXP parameter,
+  SEXP out_result) {
+  R_API_BEGIN();
+  _AssertBoosterHandleNotNull(handle);
+  int pred_type = GetPredictType(is_rawscore, is_leafidx, is_predcontrib);
+  const char* parameter_ptr = CHAR(PROTECT(Rf_asChar(parameter)));
+  int64_t out_len;
+  CHECK_CALL(LGBM_BoosterPredictForCSR(R_ExternalPtrAddr(handle),
+    INTEGER(indptr), C_API_DTYPE_INT32, INTEGER(indices),
+    REAL(data), C_API_DTYPE_FLOAT64,
+    Rf_xlength(indptr), Rf_xlength(data), Rf_asInteger(ncols),
+    pred_type, Rf_asInteger(start_iteration), Rf_asInteger(num_iteration),
+    parameter_ptr, &out_len, REAL(out_result)));
+  UNPROTECT(1);
+  return R_NilValue;
+  R_API_END();
+}
+
+SEXP LGBM_BoosterPredictForCSRSingleRow_R(SEXP handle,
+  SEXP indices,
+  SEXP data,
+  SEXP ncols,
+  SEXP is_rawscore,
+  SEXP is_leafidx,
+  SEXP is_predcontrib,
+  SEXP start_iteration,
+  SEXP num_iteration,
+  SEXP parameter,
+  SEXP out_result) {
+  R_API_BEGIN();
+  _AssertBoosterHandleNotNull(handle);
+  int pred_type = GetPredictType(is_rawscore, is_leafidx, is_predcontrib);
+  const char* parameter_ptr = CHAR(PROTECT(Rf_asChar(parameter)));
+  int nnz = static_cast<int>(Rf_xlength(data));
+  const int indptr[] = {0, nnz};
+  int64_t out_len;
+  CHECK_CALL(LGBM_BoosterPredictForCSRSingleRow(R_ExternalPtrAddr(handle),
+    indptr, C_API_DTYPE_INT32, INTEGER(indices),
+    REAL(data), C_API_DTYPE_FLOAT64,
+    2, nnz, Rf_asInteger(ncols),
+    pred_type, Rf_asInteger(start_iteration), Rf_asInteger(num_iteration),
+    parameter_ptr, &out_len, REAL(out_result)));
+  UNPROTECT(1);
+  return R_NilValue;
+  R_API_END();
+}
+
+void LGBM_FastConfigFree_wrapped(SEXP handle) {
+  LGBM_FastConfigFree(static_cast<FastConfigHandle*>(R_ExternalPtrAddr(handle)));
+}
+
+SEXP LGBM_BoosterPredictForCSRSingleRowFastInit_R(SEXP handle,
+  SEXP ncols,
+  SEXP is_rawscore,
+  SEXP is_leafidx,
+  SEXP is_predcontrib,
+  SEXP start_iteration,
+  SEXP num_iteration,
+  SEXP parameter) {
+  R_API_BEGIN();
+  _AssertBoosterHandleNotNull(handle);
+  int pred_type = GetPredictType(is_rawscore, is_leafidx, is_predcontrib);
+  SEXP ret = PROTECT(R_MakeExternalPtr(nullptr, R_NilValue, R_NilValue));
+  const char* parameter_ptr = CHAR(PROTECT(Rf_asChar(parameter)));
+  FastConfigHandle out_fastConfig;
+  CHECK_CALL(LGBM_BoosterPredictForCSRSingleRowFastInit(R_ExternalPtrAddr(handle),
+    pred_type, Rf_asInteger(start_iteration), Rf_asInteger(num_iteration),
+    C_API_DTYPE_FLOAT64, Rf_asInteger(ncols),
+    parameter_ptr, &out_fastConfig));
+  R_SetExternalPtrAddr(ret, out_fastConfig);
+  R_RegisterCFinalizerEx(ret, LGBM_FastConfigFree_wrapped, TRUE);
+  UNPROTECT(2);
+  return ret;
+  R_API_END();
+}
+
+SEXP LGBM_BoosterPredictForCSRSingleRowFast_R(SEXP handle_fastConfig,
+  SEXP indices,
+  SEXP data,
+  SEXP out_result) {
+  R_API_BEGIN();
+  int nnz = static_cast<int>(Rf_xlength(data));
+  const int indptr[] = {0, nnz};
+  int64_t out_len;
+  CHECK_CALL(LGBM_BoosterPredictForCSRSingleRowFast(R_ExternalPtrAddr(handle_fastConfig),
+    indptr, C_API_DTYPE_INT32, INTEGER(indices),
+    REAL(data),
+    2, nnz,
+    &out_len, REAL(out_result)));
+  return R_NilValue;
+  R_API_END();
+}
+
 SEXP LGBM_BoosterPredictForMat_R(SEXP handle,
   SEXP data,
   SEXP num_row,
@@ -800,6 +979,136 @@ SEXP LGBM_BoosterPredictForMat_R(SEXP handle,
   R_API_END();
 }
 
+struct SparseOutputPointers {
+  void* indptr;
+  int32_t* indices;
+  void* data;
+  int indptr_type;
+  int data_type;
+  SparseOutputPointers(void* indptr, int32_t* indices, void* data)
+  : indptr(indptr), indices(indices), data(data) {}
+};
+
+void delete_SparseOutputPointers(SparseOutputPointers *ptr) {
+  LGBM_BoosterFreePredictSparse(ptr->indptr, ptr->indices, ptr->data, C_API_DTYPE_INT32, C_API_DTYPE_FLOAT64);
+  delete ptr;
+}
+
+SEXP LGBM_BoosterPredictSparseOutput_R(SEXP handle,
+  SEXP indptr,
+  SEXP indices,
+  SEXP data,
+  SEXP is_csr,
+  SEXP nrows,
+  SEXP ncols,
+  SEXP start_iteration,
+  SEXP num_iteration,
+  SEXP parameter) {
+  SEXP cont_token = PROTECT(R_MakeUnwindCont());
+  R_API_BEGIN();
+  _AssertBoosterHandleNotNull(handle);
+  const char* out_names[] = {"indptr", "indices", "data", ""};
+  SEXP out = PROTECT(Rf_mkNamed(VECSXP, out_names));
+  const char* parameter_ptr = CHAR(PROTECT(Rf_asChar(parameter)));
+
+  int64_t out_len[2];
+  void *out_indptr;
+  int32_t *out_indices;
+  void *out_data;
+
+  CHECK_CALL(LGBM_BoosterPredictSparseOutput(R_ExternalPtrAddr(handle),
+    INTEGER(indptr), C_API_DTYPE_INT32, INTEGER(indices),
+    REAL(data), C_API_DTYPE_FLOAT64,
+    Rf_xlength(indptr), Rf_xlength(data),
+    Rf_asLogical(is_csr)? Rf_asInteger(ncols) : Rf_asInteger(nrows),
+    C_API_PREDICT_CONTRIB, Rf_asInteger(start_iteration), Rf_asInteger(num_iteration),
+    parameter_ptr,
+    Rf_asLogical(is_csr)? C_API_MATRIX_TYPE_CSR : C_API_MATRIX_TYPE_CSC,
+    out_len, &out_indptr, &out_indices, &out_data));
+
+  std::unique_ptr<SparseOutputPointers, decltype(&delete_SparseOutputPointers)> pointers_struct = {
+    new SparseOutputPointers(
+      out_indptr,
+      out_indices,
+      out_data),
+    &delete_SparseOutputPointers
+  };
+
+  SEXP out_indptr_R = safe_R_int(out_len[1], &cont_token);
+  SET_VECTOR_ELT(out, 0, out_indptr_R);
+  SEXP out_indices_R = safe_R_int(out_len[0], &cont_token);
+  SET_VECTOR_ELT(out, 1, out_indices_R);
+  SEXP out_data_R = safe_R_real(out_len[0], &cont_token);
+  SET_VECTOR_ELT(out, 2, out_data_R);
+  std::memcpy(INTEGER(out_indptr_R), out_indptr, out_len[1]*sizeof(int));
+  std::memcpy(INTEGER(out_indices_R), out_indices, out_len[0]*sizeof(int));
+  std::memcpy(REAL(out_data_R), out_data, out_len[0]*sizeof(double));
+
+  UNPROTECT(3);
+  return out;
+  R_API_END();
+}
+
+SEXP LGBM_BoosterPredictForMatSingleRow_R(SEXP handle,
+  SEXP data,
+  SEXP is_rawscore,
+  SEXP is_leafidx,
+  SEXP is_predcontrib,
+  SEXP start_iteration,
+  SEXP num_iteration,
+  SEXP parameter,
+  SEXP out_result) {
+  R_API_BEGIN();
+  _AssertBoosterHandleNotNull(handle);
+  int pred_type = GetPredictType(is_rawscore, is_leafidx, is_predcontrib);
+  const char* parameter_ptr = CHAR(PROTECT(Rf_asChar(parameter)));
+  double* ptr_ret = REAL(out_result);
+  int64_t out_len;
+  CHECK_CALL(LGBM_BoosterPredictForMatSingleRow(R_ExternalPtrAddr(handle),
+    REAL(data), C_API_DTYPE_FLOAT64, Rf_xlength(data), 1,
+    pred_type, Rf_asInteger(start_iteration), Rf_asInteger(num_iteration),
+    parameter_ptr, &out_len, ptr_ret));
+  UNPROTECT(1);
+  return R_NilValue;
+  R_API_END();
+}
+
+SEXP LGBM_BoosterPredictForMatSingleRowFastInit_R(SEXP handle,
+  SEXP ncols,
+  SEXP is_rawscore,
+  SEXP is_leafidx,
+  SEXP is_predcontrib,
+  SEXP start_iteration,
+  SEXP num_iteration,
+  SEXP parameter) {
+  R_API_BEGIN();
+  _AssertBoosterHandleNotNull(handle);
+  int pred_type = GetPredictType(is_rawscore, is_leafidx, is_predcontrib);
+  SEXP ret = PROTECT(R_MakeExternalPtr(nullptr, R_NilValue, R_NilValue));
+  const char* parameter_ptr = CHAR(PROTECT(Rf_asChar(parameter)));
+  FastConfigHandle out_fastConfig;
+  CHECK_CALL(LGBM_BoosterPredictForMatSingleRowFastInit(R_ExternalPtrAddr(handle),
+    pred_type, Rf_asInteger(start_iteration), Rf_asInteger(num_iteration),
+    C_API_DTYPE_FLOAT64, Rf_asInteger(ncols),
+    parameter_ptr, &out_fastConfig));
+  R_SetExternalPtrAddr(ret, out_fastConfig);
+  R_RegisterCFinalizerEx(ret, LGBM_FastConfigFree_wrapped, TRUE);
+  UNPROTECT(2);
+  return ret;
+  R_API_END();
+}
+
+SEXP LGBM_BoosterPredictForMatSingleRowFast_R(SEXP handle_fastConfig,
+  SEXP data,
+  SEXP out_result) {
+  R_API_BEGIN();
+  int64_t out_len;
+  CHECK_CALL(LGBM_BoosterPredictForMatSingleRowFast(R_ExternalPtrAddr(handle_fastConfig),
+    REAL(data), &out_len, REAL(out_result)));
+  return R_NilValue;
+  R_API_END();
+}
+
 SEXP LGBM_BoosterSaveModel_R(SEXP handle,
   SEXP num_iteration,
   SEXP feature_importance_type,
@@ -819,20 +1128,19 @@ SEXP LGBM_BoosterSaveModelToString_R(SEXP handle,
   SEXP cont_token = PROTECT(R_MakeUnwindCont());
   R_API_BEGIN();
   _AssertBoosterHandleNotNull(handle);
-  SEXP model_str;
   int64_t out_len = 0;
   int64_t buf_len = 1024 * 1024;
   int num_iter = Rf_asInteger(num_iteration);
   int importance_type = Rf_asInteger(feature_importance_type);
   std::vector<char> inner_char_buf(buf_len);
   CHECK_CALL(LGBM_BoosterSaveModelToString(R_ExternalPtrAddr(handle), 0, num_iter, importance_type, buf_len, &out_len, inner_char_buf.data()));
-  // if the model string was larger than the initial buffer, allocate a bigger buffer and try again
+  SEXP model_str = PROTECT(safe_R_raw(out_len, &cont_token));
+  // if the model string was larger than the initial buffer, call the function again, writing directly to the R object
   if (out_len > buf_len) {
-    inner_char_buf.resize(out_len);
-    CHECK_CALL(LGBM_BoosterSaveModelToString(R_ExternalPtrAddr(handle), 0, num_iter, importance_type, out_len, &out_len, inner_char_buf.data()));
+    CHECK_CALL(LGBM_BoosterSaveModelToString(R_ExternalPtrAddr(handle), 0, num_iter, importance_type, out_len, &out_len, reinterpret_cast<char*>(RAW(model_str))));
+  } else {
+    std::copy(inner_char_buf.begin(), inner_char_buf.begin() + out_len, reinterpret_cast<char*>(RAW(model_str)));
   }
-  model_str = PROTECT(safe_R_string(static_cast<R_xlen_t>(1), &cont_token));
-  SET_STRING_ELT(model_str, 0, safe_R_mkChar(inner_char_buf.data(), &cont_token));
   UNPROTECT(2);
   return model_str;
   R_API_END();
@@ -863,49 +1171,122 @@ SEXP LGBM_BoosterDumpModel_R(SEXP handle,
   R_API_END();
 }
 
+SEXP LGBM_DumpParamAliases_R() {
+  SEXP cont_token = PROTECT(R_MakeUnwindCont());
+  R_API_BEGIN();
+  SEXP aliases_str;
+  int64_t out_len = 0;
+  int64_t buf_len = 1024 * 1024;
+  std::vector<char> inner_char_buf(buf_len);
+  CHECK_CALL(LGBM_DumpParamAliases(buf_len, &out_len, inner_char_buf.data()));
+  // if aliases string was larger than the initial buffer, allocate a bigger buffer and try again
+  if (out_len > buf_len) {
+    inner_char_buf.resize(out_len);
+    CHECK_CALL(LGBM_DumpParamAliases(out_len, &out_len, inner_char_buf.data()));
+  }
+  aliases_str = PROTECT(safe_R_string(static_cast<R_xlen_t>(1), &cont_token));
+  SET_STRING_ELT(aliases_str, 0, safe_R_mkChar(inner_char_buf.data(), &cont_token));
+  UNPROTECT(2);
+  return aliases_str;
+  R_API_END();
+}
+
+SEXP LGBM_BoosterGetLoadedParam_R(SEXP handle) {
+  SEXP cont_token = PROTECT(R_MakeUnwindCont());
+  R_API_BEGIN();
+  _AssertBoosterHandleNotNull(handle);
+  SEXP params_str;
+  int64_t out_len = 0;
+  int64_t buf_len = 1024 * 1024;
+  std::vector<char> inner_char_buf(buf_len);
+  CHECK_CALL(LGBM_BoosterGetLoadedParam(R_ExternalPtrAddr(handle), buf_len, &out_len, inner_char_buf.data()));
+  // if aliases string was larger than the initial buffer, allocate a bigger buffer and try again
+  if (out_len > buf_len) {
+    inner_char_buf.resize(out_len);
+    CHECK_CALL(LGBM_BoosterGetLoadedParam(R_ExternalPtrAddr(handle), out_len, &out_len, inner_char_buf.data()));
+  }
+  params_str = PROTECT(safe_R_string(static_cast<R_xlen_t>(1), &cont_token));
+  SET_STRING_ELT(params_str, 0, safe_R_mkChar(inner_char_buf.data(), &cont_token));
+  UNPROTECT(2);
+  return params_str;
+  R_API_END();
+}
+
+SEXP LGBM_GetMaxThreads_R(SEXP out) {
+  R_API_BEGIN();
+  int num_threads;
+  CHECK_CALL(LGBM_GetMaxThreads(&num_threads));
+  INTEGER(out)[0] = num_threads;
+  return R_NilValue;
+  R_API_END();
+}
+
+SEXP LGBM_SetMaxThreads_R(SEXP num_threads) {
+  R_API_BEGIN();
+  int new_num_threads = Rf_asInteger(num_threads);
+  CHECK_CALL(LGBM_SetMaxThreads(new_num_threads));
+  return R_NilValue;
+  R_API_END();
+}
+
 // .Call() calls
 static const R_CallMethodDef CallEntries[] = {
-  {"LGBM_HandleIsNull_R"              , (DL_FUNC) &LGBM_HandleIsNull_R              , 1},
-  {"LGBM_DatasetCreateFromFile_R"     , (DL_FUNC) &LGBM_DatasetCreateFromFile_R     , 3},
-  {"LGBM_DatasetCreateFromCSC_R"      , (DL_FUNC) &LGBM_DatasetCreateFromCSC_R      , 8},
-  {"LGBM_DatasetCreateFromMat_R"      , (DL_FUNC) &LGBM_DatasetCreateFromMat_R      , 5},
-  {"LGBM_DatasetGetSubset_R"          , (DL_FUNC) &LGBM_DatasetGetSubset_R          , 4},
-  {"LGBM_DatasetSetFeatureNames_R"    , (DL_FUNC) &LGBM_DatasetSetFeatureNames_R    , 2},
-  {"LGBM_DatasetGetFeatureNames_R"    , (DL_FUNC) &LGBM_DatasetGetFeatureNames_R    , 1},
-  {"LGBM_DatasetSaveBinary_R"         , (DL_FUNC) &LGBM_DatasetSaveBinary_R         , 2},
-  {"LGBM_DatasetFree_R"               , (DL_FUNC) &LGBM_DatasetFree_R               , 1},
-  {"LGBM_DatasetSetField_R"           , (DL_FUNC) &LGBM_DatasetSetField_R           , 4},
-  {"LGBM_DatasetGetFieldSize_R"       , (DL_FUNC) &LGBM_DatasetGetFieldSize_R       , 3},
-  {"LGBM_DatasetGetField_R"           , (DL_FUNC) &LGBM_DatasetGetField_R           , 3},
-  {"LGBM_DatasetUpdateParamChecking_R", (DL_FUNC) &LGBM_DatasetUpdateParamChecking_R, 2},
-  {"LGBM_DatasetGetNumData_R"         , (DL_FUNC) &LGBM_DatasetGetNumData_R         , 2},
-  {"LGBM_DatasetGetNumFeature_R"      , (DL_FUNC) &LGBM_DatasetGetNumFeature_R      , 2},
-  {"LGBM_BoosterCreate_R"             , (DL_FUNC) &LGBM_BoosterCreate_R             , 2},
-  {"LGBM_BoosterFree_R"               , (DL_FUNC) &LGBM_BoosterFree_R               , 1},
-  {"LGBM_BoosterCreateFromModelfile_R", (DL_FUNC) &LGBM_BoosterCreateFromModelfile_R, 1},
-  {"LGBM_BoosterLoadModelFromString_R", (DL_FUNC) &LGBM_BoosterLoadModelFromString_R, 1},
-  {"LGBM_BoosterMerge_R"              , (DL_FUNC) &LGBM_BoosterMerge_R              , 2},
-  {"LGBM_BoosterAddValidData_R"       , (DL_FUNC) &LGBM_BoosterAddValidData_R       , 2},
-  {"LGBM_BoosterResetTrainingData_R"  , (DL_FUNC) &LGBM_BoosterResetTrainingData_R  , 2},
-  {"LGBM_BoosterResetParameter_R"     , (DL_FUNC) &LGBM_BoosterResetParameter_R     , 2},
-  {"LGBM_BoosterGetNumClasses_R"      , (DL_FUNC) &LGBM_BoosterGetNumClasses_R      , 2},
-  {"LGBM_BoosterUpdateOneIter_R"      , (DL_FUNC) &LGBM_BoosterUpdateOneIter_R      , 1},
-  {"LGBM_BoosterUpdateOneIterCustom_R", (DL_FUNC) &LGBM_BoosterUpdateOneIterCustom_R, 4},
-  {"LGBM_BoosterRollbackOneIter_R"    , (DL_FUNC) &LGBM_BoosterRollbackOneIter_R    , 1},
-  {"LGBM_BoosterGetCurrentIteration_R", (DL_FUNC) &LGBM_BoosterGetCurrentIteration_R, 2},
-  {"LGBM_BoosterGetUpperBoundValue_R" , (DL_FUNC) &LGBM_BoosterGetUpperBoundValue_R , 2},
-  {"LGBM_BoosterGetLowerBoundValue_R" , (DL_FUNC) &LGBM_BoosterGetLowerBoundValue_R , 2},
-  {"LGBM_BoosterGetEvalNames_R"       , (DL_FUNC) &LGBM_BoosterGetEvalNames_R       , 1},
-  {"LGBM_BoosterGetEval_R"            , (DL_FUNC) &LGBM_BoosterGetEval_R            , 3},
-  {"LGBM_BoosterGetNumPredict_R"      , (DL_FUNC) &LGBM_BoosterGetNumPredict_R      , 3},
-  {"LGBM_BoosterGetPredict_R"         , (DL_FUNC) &LGBM_BoosterGetPredict_R         , 3},
-  {"LGBM_BoosterPredictForFile_R"     , (DL_FUNC) &LGBM_BoosterPredictForFile_R     , 10},
-  {"LGBM_BoosterCalcNumPredict_R"     , (DL_FUNC) &LGBM_BoosterCalcNumPredict_R     , 8},
-  {"LGBM_BoosterPredictForCSC_R"      , (DL_FUNC) &LGBM_BoosterPredictForCSC_R      , 14},
-  {"LGBM_BoosterPredictForMat_R"      , (DL_FUNC) &LGBM_BoosterPredictForMat_R      , 11},
-  {"LGBM_BoosterSaveModel_R"          , (DL_FUNC) &LGBM_BoosterSaveModel_R          , 4},
-  {"LGBM_BoosterSaveModelToString_R"  , (DL_FUNC) &LGBM_BoosterSaveModelToString_R  , 3},
-  {"LGBM_BoosterDumpModel_R"          , (DL_FUNC) &LGBM_BoosterDumpModel_R          , 3},
+  {"LGBM_HandleIsNull_R"                         , (DL_FUNC) &LGBM_HandleIsNull_R                         , 1},
+  {"LGBM_DatasetCreateFromFile_R"                , (DL_FUNC) &LGBM_DatasetCreateFromFile_R                , 3},
+  {"LGBM_DatasetCreateFromCSC_R"                 , (DL_FUNC) &LGBM_DatasetCreateFromCSC_R                 , 8},
+  {"LGBM_DatasetCreateFromMat_R"                 , (DL_FUNC) &LGBM_DatasetCreateFromMat_R                 , 5},
+  {"LGBM_DatasetGetSubset_R"                     , (DL_FUNC) &LGBM_DatasetGetSubset_R                     , 4},
+  {"LGBM_DatasetSetFeatureNames_R"               , (DL_FUNC) &LGBM_DatasetSetFeatureNames_R               , 2},
+  {"LGBM_DatasetGetFeatureNames_R"               , (DL_FUNC) &LGBM_DatasetGetFeatureNames_R               , 1},
+  {"LGBM_DatasetSaveBinary_R"                    , (DL_FUNC) &LGBM_DatasetSaveBinary_R                    , 2},
+  {"LGBM_DatasetFree_R"                          , (DL_FUNC) &LGBM_DatasetFree_R                          , 1},
+  {"LGBM_DatasetSetField_R"                      , (DL_FUNC) &LGBM_DatasetSetField_R                      , 4},
+  {"LGBM_DatasetGetFieldSize_R"                  , (DL_FUNC) &LGBM_DatasetGetFieldSize_R                  , 3},
+  {"LGBM_DatasetGetField_R"                      , (DL_FUNC) &LGBM_DatasetGetField_R                      , 3},
+  {"LGBM_DatasetUpdateParamChecking_R"           , (DL_FUNC) &LGBM_DatasetUpdateParamChecking_R           , 2},
+  {"LGBM_DatasetGetNumData_R"                    , (DL_FUNC) &LGBM_DatasetGetNumData_R                    , 2},
+  {"LGBM_DatasetGetNumFeature_R"                 , (DL_FUNC) &LGBM_DatasetGetNumFeature_R                 , 2},
+  {"LGBM_DatasetGetFeatureNumBin_R"              , (DL_FUNC) &LGBM_DatasetGetFeatureNumBin_R              , 3},
+  {"LGBM_BoosterCreate_R"                        , (DL_FUNC) &LGBM_BoosterCreate_R                        , 2},
+  {"LGBM_BoosterFree_R"                          , (DL_FUNC) &LGBM_BoosterFree_R                          , 1},
+  {"LGBM_BoosterCreateFromModelfile_R"           , (DL_FUNC) &LGBM_BoosterCreateFromModelfile_R           , 1},
+  {"LGBM_BoosterLoadModelFromString_R"           , (DL_FUNC) &LGBM_BoosterLoadModelFromString_R           , 1},
+  {"LGBM_BoosterMerge_R"                         , (DL_FUNC) &LGBM_BoosterMerge_R                         , 2},
+  {"LGBM_BoosterAddValidData_R"                  , (DL_FUNC) &LGBM_BoosterAddValidData_R                  , 2},
+  {"LGBM_BoosterResetTrainingData_R"             , (DL_FUNC) &LGBM_BoosterResetTrainingData_R             , 2},
+  {"LGBM_BoosterResetParameter_R"                , (DL_FUNC) &LGBM_BoosterResetParameter_R                , 2},
+  {"LGBM_BoosterGetNumClasses_R"                 , (DL_FUNC) &LGBM_BoosterGetNumClasses_R                 , 2},
+  {"LGBM_BoosterGetNumFeature_R"                 , (DL_FUNC) &LGBM_BoosterGetNumFeature_R                 , 1},
+  {"LGBM_BoosterGetLoadedParam_R"                , (DL_FUNC) &LGBM_BoosterGetLoadedParam_R                , 1},
+  {"LGBM_BoosterUpdateOneIter_R"                 , (DL_FUNC) &LGBM_BoosterUpdateOneIter_R                 , 1},
+  {"LGBM_BoosterUpdateOneIterCustom_R"           , (DL_FUNC) &LGBM_BoosterUpdateOneIterCustom_R           , 4},
+  {"LGBM_BoosterRollbackOneIter_R"               , (DL_FUNC) &LGBM_BoosterRollbackOneIter_R               , 1},
+  {"LGBM_BoosterGetCurrentIteration_R"           , (DL_FUNC) &LGBM_BoosterGetCurrentIteration_R           , 2},
+  {"LGBM_BoosterGetUpperBoundValue_R"            , (DL_FUNC) &LGBM_BoosterGetUpperBoundValue_R            , 2},
+  {"LGBM_BoosterGetLowerBoundValue_R"            , (DL_FUNC) &LGBM_BoosterGetLowerBoundValue_R            , 2},
+  {"LGBM_BoosterGetEvalNames_R"                  , (DL_FUNC) &LGBM_BoosterGetEvalNames_R                  , 1},
+  {"LGBM_BoosterGetEval_R"                       , (DL_FUNC) &LGBM_BoosterGetEval_R                       , 3},
+  {"LGBM_BoosterGetNumPredict_R"                 , (DL_FUNC) &LGBM_BoosterGetNumPredict_R                 , 3},
+  {"LGBM_BoosterGetPredict_R"                    , (DL_FUNC) &LGBM_BoosterGetPredict_R                    , 3},
+  {"LGBM_BoosterPredictForFile_R"                , (DL_FUNC) &LGBM_BoosterPredictForFile_R                , 10},
+  {"LGBM_BoosterCalcNumPredict_R"                , (DL_FUNC) &LGBM_BoosterCalcNumPredict_R                , 8},
+  {"LGBM_BoosterPredictForCSC_R"                 , (DL_FUNC) &LGBM_BoosterPredictForCSC_R                 , 14},
+  {"LGBM_BoosterPredictForCSR_R"                 , (DL_FUNC) &LGBM_BoosterPredictForCSR_R                 , 12},
+  {"LGBM_BoosterPredictForCSRSingleRow_R"        , (DL_FUNC) &LGBM_BoosterPredictForCSRSingleRow_R        , 11},
+  {"LGBM_BoosterPredictForCSRSingleRowFastInit_R", (DL_FUNC) &LGBM_BoosterPredictForCSRSingleRowFastInit_R, 8},
+  {"LGBM_BoosterPredictForCSRSingleRowFast_R"    , (DL_FUNC) &LGBM_BoosterPredictForCSRSingleRowFast_R    , 4},
+  {"LGBM_BoosterPredictSparseOutput_R"           , (DL_FUNC) &LGBM_BoosterPredictSparseOutput_R           , 10},
+  {"LGBM_BoosterPredictForMat_R"                 , (DL_FUNC) &LGBM_BoosterPredictForMat_R                 , 11},
+  {"LGBM_BoosterPredictForMatSingleRow_R"        , (DL_FUNC) &LGBM_BoosterPredictForMatSingleRow_R        , 9},
+  {"LGBM_BoosterPredictForMatSingleRowFastInit_R", (DL_FUNC) &LGBM_BoosterPredictForMatSingleRowFastInit_R, 8},
+  {"LGBM_BoosterPredictForMatSingleRowFast_R"    , (DL_FUNC) &LGBM_BoosterPredictForMatSingleRowFast_R    , 3},
+  {"LGBM_BoosterSaveModel_R"                     , (DL_FUNC) &LGBM_BoosterSaveModel_R                     , 4},
+  {"LGBM_BoosterSaveModelToString_R"             , (DL_FUNC) &LGBM_BoosterSaveModelToString_R             , 3},
+  {"LGBM_BoosterDumpModel_R"                     , (DL_FUNC) &LGBM_BoosterDumpModel_R                     , 3},
+  {"LGBM_NullBoosterHandleError_R"               , (DL_FUNC) &LGBM_NullBoosterHandleError_R               , 0},
+  {"LGBM_DumpParamAliases_R"                     , (DL_FUNC) &LGBM_DumpParamAliases_R                     , 0},
+  {"LGBM_GetMaxThreads_R"                        , (DL_FUNC) &LGBM_GetMaxThreads_R                        , 1},
+  {"LGBM_SetMaxThreads_R"                        , (DL_FUNC) &LGBM_SetMaxThreads_R                        , 1},
   {NULL, NULL, 0}
 };
 

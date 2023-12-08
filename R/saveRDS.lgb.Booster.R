@@ -1,7 +1,9 @@
 #' @name saveRDS.lgb.Booster
-#' @title saveRDS for \code{lgb.Booster} models
-#' @description Attempts to save a model using RDS. Has an additional parameter (\code{raw})
-#'              which decides whether to save the raw model or not.
+#' @title saveRDS for \code{lgb.Booster} models (DEPRECATED)
+#' @description Calls \code{saveRDS} on an \code{lgb.Booster} object, making it serializable before the call if
+#'              it isn't already.
+#'
+#'              \bold{This function throws a warning and will be removed in future versions.}
 #' @param object \code{lgb.Booster} object to serialize.
 #' @param file a connection or the name of the file where the R object is saved to or read from.
 #' @param ascii a logical. If TRUE or NA, an ASCII representation is written; otherwise (default),
@@ -20,6 +22,8 @@
 #' @examples
 #' \donttest{
 #' library(lightgbm)
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -31,6 +35,7 @@
 #'   , metric = "l2"
 #'   , min_data = 1L
 #'   , learning_rate = 1.0
+#'   , num_threads = 2L
 #' )
 #' valids <- list(test = dtest)
 #' model <- lgb.train(
@@ -52,38 +57,24 @@ saveRDS.lgb.Booster <- function(object,
                                 refhook = NULL,
                                 raw = TRUE) {
 
-  # Check if object has a raw value (and if the user wants to store the raw)
-  if (is.na(object$raw) && raw) {
+  warning("'saveRDS.lgb.Booster' is deprecated and will be removed in a future release. Use saveRDS() instead.")
 
-    object$save()
-
-    saveRDS(
-      object
-      , file = file
-      , ascii = ascii
-      , version = version
-      , compress = compress
-      , refhook = refhook
-    )
-
-    # Free model from memory
-    object$raw <- NA
-
-    return(invisible(NULL))
-
-  } else {
-
-    saveRDS(
-      object
-      , file = file
-      , ascii = ascii
-      , version = version
-      , compress = compress
-      , refhook = refhook
-    )
-
-    return(invisible(NULL))
-
+  if (!.is_Booster(x = object)) {
+    stop("saveRDS.lgb.Booster: object should be an ", sQuote("lgb.Booster"))
   }
 
+  if (is.null(object$raw)) {
+    lgb.make_serializable(object)
+  }
+
+  saveRDS(
+    object
+    , file = file
+    , ascii = ascii
+    , version = version
+    , compress = compress
+    , refhook = refhook
+  )
+
+  return(invisible(NULL))
 }

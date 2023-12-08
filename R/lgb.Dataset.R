@@ -10,9 +10,6 @@
 #'              \code{group = c(10, 20, 40, 10, 10, 10)}, that means that you have 6 groups,
 #'              where the first 10 records are in the first group, records 11-30 are in the
 #'              second group, etc.
-#' @param info a list of information of the \code{lgb.Dataset} object. NOTE: use of \code{info}
-#'             is deprecated as of v3.3.0. Use keyword arguments (e.g. \code{init_score = init_score})
-#'             directly.
 #' @keywords internal
 NULL
 
@@ -52,28 +49,20 @@ Dataset <- R6::R6Class(
                           predictor = NULL,
                           free_raw_data = TRUE,
                           used_indices = NULL,
-                          info = list(),
                           label = NULL,
                           weight = NULL,
                           group = NULL,
                           init_score = NULL) {
 
       # validate inputs early to avoid unnecessary computation
-      if (!(is.null(reference) || lgb.is.Dataset(reference))) {
+      if (!(is.null(reference) || .is_Dataset(reference))) {
           stop("lgb.Dataset: If provided, reference must be a ", sQuote("lgb.Dataset"))
       }
-      if (!(is.null(predictor) || lgb.is.Predictor(predictor))) {
+      if (!(is.null(predictor) || .is_Predictor(predictor))) {
           stop("lgb.Dataset: If provided, predictor must be a ", sQuote("lgb.Predictor"))
       }
 
-      if (length(info) > 0L) {
-        warning(paste0(
-          "lgb.Dataset: found fields passed through 'info'. "
-          , "As of v3.3.0, this behavior is deprecated, and support for it will be removed in a future release. "
-          , "To suppress this warning, use keyword arguments 'label', 'weight', 'group', or 'init_score' directly"
-        ))
-      }
-
+      info <- list()
       if (!is.null(label)) {
         info[["label"]] <- label
       }
@@ -113,30 +102,14 @@ Dataset <- R6::R6Class(
     },
 
     create_valid = function(data,
-                            info = list(),
                             label = NULL,
                             weight = NULL,
                             group = NULL,
                             init_score = NULL,
-                            params = list(),
-                            ...) {
-
-      additional_params <- list(...)
-      if (length(additional_params) > 0L) {
-        warning(paste0(
-          "Dataset$create_valid(): Found the following passed through '...': "
-          , paste(names(additional_params), collapse = ", ")
-          , ". These will be used, but in future releases of lightgbm, this warning will become an error. "
-          , "Add these to 'params' instead. "
-          , "See ?lgb.Dataset.create.valid for documentation on how to call this function."
-        ))
-      }
-
-      # anything passed into '...' should be overwritten by things passed to 'params'
-      params <- modifyList(additional_params, params)
+                            params = list()) {
 
       # the Dataset's existing parameters should be overwritten by any passed in to this call
-      params <- modifyList(self$get_params(), params)
+      params <- modifyList(private$params, params)
 
       # Create new dataset
       ret <- Dataset$new(
@@ -148,7 +121,6 @@ Dataset <- R6::R6Class(
         , predictor = private$predictor
         , free_raw_data = private$free_raw_data
         , used_indices = NULL
-        , info = info
         , label = label
         , weight = weight
         , group = group
@@ -163,7 +135,7 @@ Dataset <- R6::R6Class(
     construct = function() {
 
       # Check for handle null
-      if (!lgb.is.null.handle(x = private$handle)) {
+      if (!.is_null_handle(x = private$handle)) {
         return(invisible(self))
       }
 
@@ -189,7 +161,7 @@ Dataset <- R6::R6Class(
             # Provided indices, but some indices are missing?
             if (sum(is.na(cate_indices)) > 0L) {
               stop(
-                "lgb.self.get.handle: supplied an unknown feature in categorical_feature: "
+                "lgb.Dataset.construct: supplied an unknown feature in categorical_feature: "
                 , sQuote(private$categorical_feature[is.na(cate_indices)])
               )
             }
@@ -197,12 +169,13 @@ Dataset <- R6::R6Class(
           } else {
 
             # Check if more categorical features were output over the feature space
-            if (max(private$categorical_feature) > length(private$colnames)) {
+            data_is_not_filename <- !is.character(private$raw_data)
+            if (data_is_not_filename && max(private$categorical_feature) > ncol(private$raw_data)) {
               stop(
-                "lgb.self.get.handle: supplied a too large value in categorical_feature: "
+                "lgb.Dataset.construct: supplied a too large value in categorical_feature: "
                 , max(private$categorical_feature)
                 , " but only "
-                , length(private$colnames)
+                , ncol(private$raw_data)
                 , " features"
               )
             }
@@ -218,7 +191,7 @@ Dataset <- R6::R6Class(
       }
 
       # Generate parameter str
-      params_str <- lgb.params2str(params = private$params)
+      params_str <- .params2str(params = private$params)
 
       # Get handle of reference dataset
       ref_handle <- NULL
@@ -264,7 +237,7 @@ Dataset <- R6::R6Class(
           if (length(private$raw_data@p) > 2147483647L) {
             stop("Cannot support large CSC matrix")
           }
-          # Are we using a dgCMatrix (sparsed matrix column compressed)
+          # Are we using a dgCMatrix (sparse matrix column compressed)
           handle <- .Call(
             LGBM_DatasetCreateFromCSC_R
             , private$raw_data@p
@@ -304,7 +277,7 @@ Dataset <- R6::R6Class(
         )
 
       }
-      if (lgb.is.null.handle(x = handle)) {
+      if (.is_null_handle(x = handle)) {
         stop("lgb.Dataset.construct: cannot create Dataset handle")
       }
       # Setup class and private type
@@ -316,6 +289,13 @@ Dataset <- R6::R6Class(
         self$set_colnames(colnames = private$colnames)
       }
 
+      # Ensure that private$colnames matches the feature names on the C++ side. This line is necessary
+      # in cases like constructing from a file or from a matrix with no column names.
+      private$colnames <- .Call(
+          LGBM_DatasetGetFeatureNames_R
+          , private$handle
+      )
+
       # Load init score if requested
       if (!is.null(private$predictor) && is.null(private$used_indices)) {
 
@@ -323,7 +303,6 @@ Dataset <- R6::R6Class(
         init_score <- private$predictor$predict(
           data = private$raw_data
           , rawscore = TRUE
-          , reshape = TRUE
         )
 
         # Not needed to transpose, for is col_marjor
@@ -366,7 +345,7 @@ Dataset <- R6::R6Class(
     dim = function() {
 
       # Check for handle
-      if (!lgb.is.null.handle(x = private$handle)) {
+      if (!.is_null_handle(x = private$handle)) {
 
         num_row <- 0L
         num_col <- 0L
@@ -404,11 +383,33 @@ Dataset <- R6::R6Class(
 
     },
 
+    # Get number of bins for feature
+    get_feature_num_bin = function(feature) {
+      if (.is_null_handle(x = private$handle)) {
+        stop("Cannot get number of bins in feature before constructing Dataset.")
+      }
+      if (is.character(feature)) {
+        feature_name <- feature
+        feature <- which(private$colnames == feature_name)
+        if (length(feature) == 0L) {
+          stop(sprintf("feature '%s' not found", feature_name))
+        }
+      }
+      num_bin <- integer(1L)
+      .Call(
+        LGBM_DatasetGetFeatureNumBin_R
+        , private$handle
+        , feature - 1L
+        , num_bin
+      )
+      return(num_bin)
+    },
+
     # Get column names
     get_colnames = function() {
 
       # Check for handle
-      if (!lgb.is.null.handle(x = private$handle)) {
+      if (!.is_null_handle(x = private$handle)) {
         private$colnames <- .Call(
           LGBM_DatasetGetFeatureNames_R
           , private$handle
@@ -448,7 +449,7 @@ Dataset <- R6::R6Class(
 
       # Write column names
       private$colnames <- colnames
-      if (!lgb.is.null.handle(x = private$handle)) {
+      if (!.is_null_handle(x = private$handle)) {
 
         # Merge names with tab separation
         merged_name <- paste0(as.list(private$colnames), collapse = "\t")
@@ -464,32 +465,20 @@ Dataset <- R6::R6Class(
 
     },
 
-    getinfo = function(name) {
-      warning(paste0(
-        "Dataset$getinfo() is deprecated and will be removed in a future release. "
-        , "Use Dataset$get_field() instead."
-      ))
-      return(
-        self$get_field(
-          field_name = name
-        )
-      )
-    },
-
     get_field = function(field_name) {
 
       # Check if attribute key is in the known attribute list
       if (!is.character(field_name) || length(field_name) != 1L || !field_name %in% .INFO_KEYS()) {
         stop(
           "Dataset$get_field(): field_name must one of the following: "
-          , paste0(sQuote(.INFO_KEYS()), collapse = ", ")
+          , toString(sQuote(.INFO_KEYS()))
         )
       }
 
       # Check for info name and handle
       if (is.null(private$info[[field_name]])) {
 
-        if (lgb.is.null.handle(x = private$handle)) {
+        if (.is_null_handle(x = private$handle)) {
           stop("Cannot perform Dataset$get_field() before constructing Dataset.")
         }
 
@@ -502,15 +491,13 @@ Dataset <- R6::R6Class(
           , info_len
         )
 
-        # Check if info is not empty
         if (info_len > 0L) {
 
           # Get back fields
-          ret <- NULL
-          ret <- if (field_name == "group") {
-            integer(info_len) # Integer
+          if (field_name == "group") {
+            ret <- integer(info_len)
           } else {
-            numeric(info_len) # Numeric
+            ret <- numeric(info_len)
           }
 
           .Call(
@@ -529,40 +516,27 @@ Dataset <- R6::R6Class(
 
     },
 
-    setinfo = function(name, info) {
-      warning(paste0(
-        "Dataset$setinfo() is deprecated and will be removed in a future release. "
-        , "Use Dataset$set_field() instead."
-      ))
-      return(
-        self$set_field(
-          field_name = name
-          , data = info
-        )
-      )
-    },
-
     set_field = function(field_name, data) {
 
       # Check if attribute key is in the known attribute list
       if (!is.character(field_name) || length(field_name) != 1L || !field_name %in% .INFO_KEYS()) {
         stop(
           "Dataset$set_field(): field_name must one of the following: "
-          , paste0(sQuote(.INFO_KEYS()), collapse = ", ")
+          , toString(sQuote(.INFO_KEYS()))
         )
       }
 
       # Check for type of information
       data <- if (field_name == "group") {
-        as.integer(data) # Integer
+        as.integer(data)
       } else {
-        as.numeric(data) # Numeric
+        as.numeric(data)
       }
 
       # Store information privately
       private$info[[field_name]] <- data
 
-      if (!lgb.is.null.handle(x = private$handle) && !is.null(data)) {
+      if (!.is_null_handle(x = private$handle) && !is.null(data)) {
 
         if (length(data) > 0L) {
 
@@ -584,51 +558,18 @@ Dataset <- R6::R6Class(
 
     },
 
-    # Slice dataset
-    slice = function(idxset, ...) {
+    slice = function(idxset) {
 
-      additional_keyword_args <- list(...)
-
-      if (length(additional_keyword_args) > 0L) {
-        warning(paste0(
-          "Dataset$slice(): Found the following passed through '...': "
-          , paste(names(additional_keyword_args), collapse = ", ")
-          , ". These are ignored and should be removed. "
-          , "To change the parameters of a Dataset produced by Dataset$slice(), use Dataset$set_params(). "
-          , "To modify attributes like 'init_score', use Dataset$set_field(). "
-          , "In future releases of lightgbm, this warning will become an error."
-        ))
-      }
-
-      # extract Dataset attributes passed through '...'
-      #
-      # NOTE: takes advantage of the fact that list[["non-existent-key"]] returns NULL
-      group <- additional_keyword_args[["group"]]
-      init_score <- additional_keyword_args[["init_score"]]
-      label <- additional_keyword_args[["label"]]
-      weight <- additional_keyword_args[["weight"]]
-
-      # remove attributes from '...', so only params are left
-      for (info_key in .INFO_KEYS()) {
-        additional_keyword_args[[info_key]] <- NULL
-      }
-
-      # Perform slicing
       return(
         Dataset$new(
           data = NULL
-          , params = utils::modifyList(self$get_params(), additional_keyword_args)
+          , params = private$params
           , reference = self
           , colnames = private$colnames
           , categorical_feature = private$categorical_feature
           , predictor = private$predictor
           , free_raw_data = private$free_raw_data
           , used_indices = sort(idxset, decreasing = FALSE)
-          , info = NULL
-          , group = group
-          , init_score = init_score
-          , label = label
-          , weight = weight
         )
       )
 
@@ -641,15 +582,17 @@ Dataset <- R6::R6Class(
       if (length(params) == 0L) {
         return(invisible(self))
       }
-      if (lgb.is.null.handle(x = private$handle)) {
-        private$params <- utils::modifyList(private$params, params)
+      new_params <- utils::modifyList(private$params, params)
+      if (.is_null_handle(x = private$handle)) {
+        private$params <- new_params
       } else {
         tryCatch({
           .Call(
             LGBM_DatasetUpdateParamChecking_R
-            , lgb.params2str(params = private$params)
-            , lgb.params2str(params = params)
+            , .params2str(params = private$params)
+            , .params2str(params = new_params)
           )
+          private$params <- new_params
         }, error = function(e) {
           # If updating failed but raw data is not available, raise an error because
           # achieving what the user asked for is not possible
@@ -659,7 +602,7 @@ Dataset <- R6::R6Class(
 
           # If updating failed but raw data is available, modify the params
           # on the R side and re-set ("deconstruct") the Dataset
-          private$params <- utils::modifyList(private$params, params)
+          private$params <- new_params
           self$finalize()
         })
       }
@@ -667,6 +610,11 @@ Dataset <- R6::R6Class(
 
     },
 
+    # [description] Get only Dataset-specific parameters. This is primarily used by
+    #               Booster to update its parameters based on the characteristics of
+    #               a Dataset. It should not be used by other methods in this class,
+    #               since "verbose" is not a Dataset parameter and needs to be passed
+    #               through to avoid globally re-setting verbosity.
     get_params = function() {
       dataset_params <- unname(unlist(.DATASET_PARAMETERS()))
       ret <- list()
@@ -701,7 +649,6 @@ Dataset <- R6::R6Class(
 
     },
 
-    # Set reference
     set_reference = function(reference) {
 
       # setting reference to this same Dataset object doesn't require any changes
@@ -716,7 +663,7 @@ Dataset <- R6::R6Class(
           please set ", sQuote("free_raw_data = FALSE"), " when you construct lgb.Dataset")
       }
 
-      if (!lgb.is.Dataset(reference)) {
+      if (!.is_Dataset(reference)) {
         stop("set_reference: Can only use lgb.Dataset as a reference")
       }
 
@@ -761,18 +708,16 @@ Dataset <- R6::R6Class(
     info = NULL,
     version = 0L,
 
-    # Get handle
     get_handle = function() {
 
       # Get handle and construct if needed
-      if (lgb.is.null.handle(x = private$handle)) {
+      if (.is_null_handle(x = private$handle)) {
         self$construct()
       }
       return(private$handle)
 
     },
 
-    # Set predictor
     set_predictor = function(predictor) {
 
       if (identical(private$predictor, predictor)) {
@@ -789,7 +734,7 @@ Dataset <- R6::R6Class(
       if (!is.null(predictor)) {
 
         # Predictor is unknown
-        if (!lgb.is.Predictor(predictor)) {
+        if (!.is_Predictor(predictor)) {
           stop("set_predictor: Can only use lgb.Predictor as predictor")
         }
 
@@ -830,12 +775,13 @@ Dataset <- R6::R6Class(
 #'                      This reduces LightGBM's memory consumption, but it means that the Dataset object
 #'                      cannot be changed after it has been constructed. If you'd prefer to be able to
 #'                      change the Dataset object after construction, set \code{free_raw_data = FALSE}.
-#' @param ... other parameters passed to \code{params}
 #'
 #' @return constructed dataset
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -851,26 +797,11 @@ lgb.Dataset <- function(data,
                         colnames = NULL,
                         categorical_feature = NULL,
                         free_raw_data = TRUE,
-                        info = list(),
                         label = NULL,
                         weight = NULL,
                         group = NULL,
-                        init_score = NULL,
-                        ...) {
+                        init_score = NULL) {
 
-  additional_params <- list(...)
-  params <- modifyList(params, additional_params)
-
-  if (length(additional_params) > 0L) {
-    warning(paste0(
-      "lgb.Dataset: Found the following passed through '...': "
-      , paste(names(additional_params), collapse = ", ")
-      , ". These will be used, but in future releases of lightgbm, this warning will become an error. "
-      , "Add these to 'params' instead. See ?lgb.Dataset for documentation on how to call this function."
-    ))
-  }
-
-  # Create new dataset
   return(
     invisible(Dataset$new(
       data = data
@@ -881,7 +812,6 @@ lgb.Dataset <- function(data,
       , predictor = NULL
       , free_raw_data = free_raw_data
       , used_indices = NULL
-      , info = info
       , label = label
       , weight = weight
       , group = group
@@ -904,13 +834,13 @@ lgb.Dataset <- function(data,
 #'               The "Dataset Parameters" section of the documentation} for a list of parameters
 #'               and valid values. If this is an empty list (the default), the validation Dataset
 #'               will have the same parameters as the Dataset passed to argument \code{dataset}.
-#' @param ... additional \code{lgb.Dataset} parameters.
-#'            NOTE: As of v3.3.0, use of \code{...} is deprecated. Add parameters to \code{params} directly.
 #'
 #' @return constructed dataset
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -953,42 +883,28 @@ lgb.Dataset <- function(data,
 #' )
 #' dvalid$construct()
 #' }
-#' @importFrom utils modifyList
 #' @export
 lgb.Dataset.create.valid <- function(dataset,
                                      data,
-                                     info = list(),
                                      label = NULL,
                                      weight = NULL,
                                      group = NULL,
                                      init_score = NULL,
-                                     params = list(),
-                                     ...) {
+                                     params = list()) {
 
-  if (!lgb.is.Dataset(x = dataset)) {
+  if (!.is_Dataset(x = dataset)) {
     stop("lgb.Dataset.create.valid: input data should be an lgb.Dataset object")
-  }
-
-  additional_params <- list(...)
-  if (length(additional_params) > 0L) {
-    warning(paste0(
-      "lgb.Dataset.create.valid: Found the following passed through '...': "
-      , paste(names(additional_params), collapse = ", ")
-      , ". These will be used, but in future releases of lightgbm, this warning will become an error. "
-      , "Add these to 'params' instead. See ?lgb.Dataset.create.valid for documentation on how to call this function."
-    ))
   }
 
   # Create validation dataset
   return(invisible(
     dataset$create_valid(
       data = data
-      , info = info
       , label = label
       , weight = weight
       , group = group
       , init_score = init_score
-      , params = utils::modifyList(params, additional_params)
+      , params = params
     )
   ))
 
@@ -1001,6 +917,8 @@ lgb.Dataset.create.valid <- function(dataset,
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -1010,7 +928,7 @@ lgb.Dataset.create.valid <- function(dataset,
 #' @export
 lgb.Dataset.construct <- function(dataset) {
 
-  if (!lgb.is.Dataset(x = dataset)) {
+  if (!.is_Dataset(x = dataset)) {
     stop("lgb.Dataset.construct: input data should be an lgb.Dataset object")
   }
 
@@ -1021,7 +939,6 @@ lgb.Dataset.construct <- function(dataset) {
 #' @title Dimensions of an \code{lgb.Dataset}
 #' @description Returns a vector of numbers of rows and of columns in an \code{lgb.Dataset}.
 #' @param x Object of class \code{lgb.Dataset}
-#' @param ... other parameters (ignored)
 #'
 #' @return a vector of numbers of rows and of columns
 #'
@@ -1031,6 +948,8 @@ lgb.Dataset.construct <- function(dataset) {
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -1041,19 +960,9 @@ lgb.Dataset.construct <- function(dataset) {
 #' }
 #' @rdname dim
 #' @export
-dim.lgb.Dataset <- function(x, ...) {
+dim.lgb.Dataset <- function(x) {
 
-  additional_args <- list(...)
-  if (length(additional_args) > 0L) {
-    warning(paste0(
-      "dim.lgb.Dataset: Found the following passed through '...': "
-      , paste(names(additional_args), collapse = ", ")
-      , ". These are ignored. In future releases of lightgbm, this warning will become an error. "
-      , "See ?dim.lgb.Dataset for documentation on how to call this function."
-    ))
-  }
-
-  if (!lgb.is.Dataset(x = x)) {
+  if (!.is_Dataset(x = x)) {
     stop("dim.lgb.Dataset: input data should be an lgb.Dataset object")
   }
 
@@ -1074,6 +983,8 @@ dim.lgb.Dataset <- function(x, ...) {
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -1088,7 +999,7 @@ dim.lgb.Dataset <- function(x, ...) {
 #' @export
 dimnames.lgb.Dataset <- function(x) {
 
-  if (!lgb.is.Dataset(x = x)) {
+  if (!.is_Dataset(x = x)) {
     stop("dimnames.lgb.Dataset: input data should be an lgb.Dataset object")
   }
 
@@ -1140,11 +1051,12 @@ dimnames.lgb.Dataset <- function(x) {
 #'              original \code{lgb.Dataset} object
 #' @param dataset Object of class \code{lgb.Dataset}
 #' @param idxset an integer vector of indices of rows needed
-#' @param ... other parameters (currently not used)
 #' @return constructed sub dataset
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -1154,148 +1066,20 @@ dimnames.lgb.Dataset <- function(x) {
 #' labels <- lightgbm::get_field(dsub, "label")
 #' }
 #' @export
-slice <- function(dataset, ...) {
+slice <- function(dataset, idxset) {
   UseMethod("slice")
 }
 
 #' @rdname slice
 #' @export
-slice.lgb.Dataset <- function(dataset, idxset, ...) {
+slice.lgb.Dataset <- function(dataset, idxset) {
 
-  if (!lgb.is.Dataset(x = dataset)) {
+  if (!.is_Dataset(x = dataset)) {
     stop("slice.lgb.Dataset: input dataset should be an lgb.Dataset object")
   }
 
-  return(invisible(dataset$slice(idxset = idxset, ...)))
+  return(invisible(dataset$slice(idxset = idxset)))
 
-}
-
-#' @name getinfo
-#' @title Get information of an \code{lgb.Dataset} object
-#' @description Get one attribute of a \code{lgb.Dataset}
-#' @param dataset Object of class \code{lgb.Dataset}
-#' @param name the name of the information field to get (see details)
-#' @param ... other parameters (ignored)
-#' @return info data
-#'
-#' @details
-#' The \code{name} field can be one of the following:
-#'
-#' \itemize{
-#'     \item \code{label}: label lightgbm learn from ;
-#'     \item \code{weight}: to do a weight rescale ;
-#'     \item{\code{group}: used for learning-to-rank tasks. An integer vector describing how to
-#'         group rows together as ordered results from the same set of candidate results to be ranked.
-#'         For example, if you have a 100-document dataset with \code{group = c(10, 20, 40, 10, 10, 10)},
-#'         that means that you have 6 groups, where the first 10 records are in the first group,
-#'         records 11-30 are in the second group, etc.}
-#'     \item \code{init_score}: initial score is the base prediction lightgbm will boost from.
-#' }
-#'
-#' @examples
-#' \donttest{
-#' data(agaricus.train, package = "lightgbm")
-#' train <- agaricus.train
-#' dtrain <- lgb.Dataset(train$data, label = train$label)
-#' lgb.Dataset.construct(dtrain)
-#'
-#' labels <- lightgbm::getinfo(dtrain, "label")
-#' lightgbm::setinfo(dtrain, "label", 1 - labels)
-#'
-#' labels2 <- lightgbm::getinfo(dtrain, "label")
-#' stopifnot(all(labels2 == 1 - labels))
-#' }
-#' @export
-getinfo <- function(dataset, ...) {
-  UseMethod("getinfo")
-}
-
-#' @rdname getinfo
-#' @export
-getinfo.lgb.Dataset <- function(dataset, name, ...) {
-
-  warning("Calling getinfo() on a lgb.Dataset is deprecated. Use get_field() instead.")
-
-  additional_args <- list(...)
-  if (length(additional_args) > 0L) {
-    warning(paste0(
-      "getinfo.lgb.Dataset: Found the following passed through '...': "
-      , paste(names(additional_args), collapse = ", ")
-      , ". These are ignored. In future releases of lightgbm, this warning will become an error. "
-      , "See ?getinfo.lgb.Dataset for documentation on how to call this function."
-    ))
-  }
-
-  if (!lgb.is.Dataset(x = dataset)) {
-    stop("getinfo.lgb.Dataset: input dataset should be an lgb.Dataset object")
-  }
-
-  return(dataset$get_field(field_name = name))
-
-}
-
-#' @name setinfo
-#' @title Set information of an \code{lgb.Dataset} object
-#' @description Set one attribute of a \code{lgb.Dataset}
-#' @param dataset Object of class \code{lgb.Dataset}
-#' @param name the name of the field to get
-#' @param info the specific field of information to set
-#' @param ... other parameters (ignored)
-#' @return the dataset you passed in
-#'
-#' @details
-#' The \code{name} field can be one of the following:
-#'
-#' \itemize{
-#'     \item{\code{label}: vector of labels to use as the target variable}
-#'     \item{\code{weight}: to do a weight rescale}
-#'     \item{\code{init_score}: initial score is the base prediction lightgbm will boost from}
-#'     \item{\code{group}: used for learning-to-rank tasks. An integer vector describing how to
-#'         group rows together as ordered results from the same set of candidate results to be ranked.
-#'         For example, if you have a 100-document dataset with \code{group = c(10, 20, 40, 10, 10, 10)},
-#'         that means that you have 6 groups, where the first 10 records are in the first group,
-#'         records 11-30 are in the second group, etc.}
-#' }
-#'
-#' @examples
-#' \donttest{
-#' data(agaricus.train, package = "lightgbm")
-#' train <- agaricus.train
-#' dtrain <- lgb.Dataset(train$data, label = train$label)
-#' lgb.Dataset.construct(dtrain)
-#'
-#' labels <- lightgbm::getinfo(dtrain, "label")
-#' lightgbm::setinfo(dtrain, "label", 1 - labels)
-#'
-#' labels2 <- lightgbm::getinfo(dtrain, "label")
-#' stopifnot(all.equal(labels2, 1 - labels))
-#' }
-#' @export
-setinfo <- function(dataset, ...) {
-  UseMethod("setinfo")
-}
-
-#' @rdname setinfo
-#' @export
-setinfo.lgb.Dataset <- function(dataset, name, info, ...) {
-
-  warning("Calling setinfo() on a lgb.Dataset is deprecated. Use set_field() instead.")
-
-  additional_args <- list(...)
-  if (length(additional_args) > 0L) {
-    warning(paste0(
-      "setinfo.lgb.Dataset: Found the following passed through '...': "
-      , paste(names(additional_args), collapse = ", ")
-      , ". These are ignored. In future releases of lightgbm, this warning will become an error. "
-      , "See ?setinfo.lgb.Dataset for documentation on how to call this function."
-    ))
-  }
-
-  if (!lgb.is.Dataset(x = dataset)) {
-    stop("setinfo.lgb.Dataset: input dataset should be an lgb.Dataset object")
-  }
-
-  return(invisible(dataset$set_field(field_name = name, data = info)))
 }
 
 #' @name get_field
@@ -1317,6 +1101,8 @@ setinfo.lgb.Dataset <- function(dataset, name, info, ...) {
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -1338,7 +1124,7 @@ get_field <- function(dataset, field_name) {
 get_field.lgb.Dataset <- function(dataset, field_name) {
 
   # Check if dataset is not a dataset
-  if (!lgb.is.Dataset(x = dataset)) {
+  if (!.is_Dataset(x = dataset)) {
     stop("get_field.lgb.Dataset(): input dataset should be an lgb.Dataset object")
   }
 
@@ -1366,6 +1152,8 @@ get_field.lgb.Dataset <- function(dataset, field_name) {
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -1386,7 +1174,7 @@ set_field <- function(dataset, field_name, data) {
 #' @export
 set_field.lgb.Dataset <- function(dataset, field_name, data) {
 
-  if (!lgb.is.Dataset(x = dataset)) {
+  if (!.is_Dataset(x = dataset)) {
     stop("set_field.lgb.Dataset: input dataset should be an lgb.Dataset object")
   }
 
@@ -1405,6 +1193,8 @@ set_field.lgb.Dataset <- function(dataset, field_name, data) {
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -1417,7 +1207,7 @@ set_field.lgb.Dataset <- function(dataset, field_name, data) {
 #' @export
 lgb.Dataset.set.categorical <- function(dataset, categorical_feature) {
 
-  if (!lgb.is.Dataset(x = dataset)) {
+  if (!.is_Dataset(x = dataset)) {
     stop("lgb.Dataset.set.categorical: input dataset should be an lgb.Dataset object")
   }
 
@@ -1435,6 +1225,8 @@ lgb.Dataset.set.categorical <- function(dataset, categorical_feature) {
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' # create training Dataset
 #' data(agaricus.train, package ="lightgbm")
 #' train <- agaricus.train
@@ -1450,7 +1242,7 @@ lgb.Dataset.set.categorical <- function(dataset, categorical_feature) {
 #' @export
 lgb.Dataset.set.reference <- function(dataset, reference) {
 
-  if (!lgb.is.Dataset(x = dataset)) {
+  if (!.is_Dataset(x = dataset)) {
     stop("lgb.Dataset.set.reference: input dataset should be an lgb.Dataset object")
   }
 
@@ -1468,6 +1260,8 @@ lgb.Dataset.set.reference <- function(dataset, reference) {
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -1476,12 +1270,12 @@ lgb.Dataset.set.reference <- function(dataset, reference) {
 #' @export
 lgb.Dataset.save <- function(dataset, fname) {
 
-  if (!lgb.is.Dataset(x = dataset)) {
-    stop("lgb.Dataset.set: input dataset should be an lgb.Dataset object")
+  if (!.is_Dataset(x = dataset)) {
+    stop("lgb.Dataset.save: input dataset should be an lgb.Dataset object")
   }
 
   if (!is.character(fname)) {
-    stop("lgb.Dataset.set: fname should be a character or a file connection")
+    stop("lgb.Dataset.save: fname should be a character or a file connection")
   }
 
   return(invisible(dataset$save_binary(fname = fname)))

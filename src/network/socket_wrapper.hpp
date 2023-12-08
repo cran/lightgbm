@@ -35,12 +35,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-// ifaddrs.h is not available on Solaris 10
-#if (defined(sun) || defined(__sun)) && (defined(__SVR4) || defined(__svr4__))
-  #include "ifaddrs_patch.h"
-#else
-  #include <ifaddrs.h>
-#endif
+#include <ifaddrs.h>
 
 #endif  // defined(_WIN32)
 
@@ -253,7 +248,7 @@ class TcpSocket {
   }
 
   inline bool Connect(const char *url, int port) {
-    sockaddr_in  server_addr = GetAddress(url, port);
+    sockaddr_in server_addr = GetAddress(url, port);
     if (connect(sockfd_, reinterpret_cast<const sockaddr*>(&server_addr), sizeof(sockaddr_in)) == 0) {
       return true;
     }

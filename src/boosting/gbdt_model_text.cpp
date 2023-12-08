@@ -16,7 +16,7 @@
 
 namespace LightGBM {
 
-const char* kModelVersion = "v3";
+const char* kModelVersion = "v4";
 
 std::string GBDT::DumpModel(int start_iteration, int num_iteration, int feature_importance_type) const {
   std::stringstream str_buf;
@@ -354,7 +354,7 @@ std::string GBDT::SaveModelToString(int start_iteration, int num_iteration, int 
   std::vector<std::string> tree_strs(num_used_model - start_model);
   std::vector<size_t> tree_sizes(num_used_model - start_model);
   // output tree models
-  #pragma omp parallel for schedule(static)
+  #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
   for (int i = start_model; i < num_used_model; ++i) {
     const int idx = i - start_model;
     tree_strs[idx] = "Tree=" + std::to_string(idx) + '\n';
@@ -398,6 +398,11 @@ std::string GBDT::SaveModelToString(int start_iteration, int num_iteration, int 
     ss << "\nparameters:" << '\n';
     ss << loaded_parameter_ << "\n";
     ss << "end of parameters" << '\n';
+  }
+  if (!parser_config_str_.empty()) {
+    ss << "\nparser:" << '\n';
+    ss << parser_config_str_ << "\n";
+    ss << "end of parser" << '\n';
   }
   return ss.str();
 }
@@ -547,7 +552,7 @@ bool GBDT::LoadModelFromString(const char* buffer, size_t len) {
       models_.emplace_back(nullptr);
     }
     OMP_INIT_EX();
-    #pragma omp parallel for schedule(static)
+    #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
     for (int i = 0; i < num_trees; ++i) {
       OMP_LOOP_EX_BEGIN();
       auto cur_p = p + tree_boundries[i];
@@ -568,7 +573,7 @@ bool GBDT::LoadModelFromString(const char* buffer, size_t len) {
   num_iteration_for_pred_ = static_cast<int>(models_.size()) / num_tree_per_iteration_;
   num_init_iteration_ = num_iteration_for_pred_;
   iter_ = 0;
-  bool is_inparameter = false;
+  bool is_inparameter = false, is_inparser = false;
   std::stringstream ss;
   Common::C_stringstream(ss);
   while (p < end) {
@@ -594,6 +599,28 @@ bool GBDT::LoadModelFromString(const char* buffer, size_t len) {
   if (!ss.str().empty()) {
     loaded_parameter_ = ss.str();
   }
+  ss.clear();
+  ss.str("");
+  while (p < end) {
+    auto line_len = Common::GetLine(p);
+    if (line_len > 0) {
+      std::string cur_line(p, line_len);
+      if (cur_line == std::string("parser:")) {
+        is_inparser = true;
+      } else if (cur_line == std::string("end of parser")) {
+        p += line_len;
+        p = Common::SkipNewLine(p);
+        break;
+      } else if (is_inparser) {
+        ss << cur_line << "\n";
+      }
+    }
+    p += line_len;
+    p = Common::SkipNewLine(p);
+  }
+  parser_config_str_ = ss.str();
+  ss.clear();
+  ss.str("");
   return true;
 }
 
