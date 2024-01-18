@@ -1,6 +1,6 @@
-1f50be64cff598579395bd5ca8588b80 *DESCRIPTION
+d4e270b6aeed92fe8ee0ba1069cdab69 *DESCRIPTION
 67927d7f2fe70fdfe9e23b525e3ae960 *LICENSE
-a7f5d509aa3506c9f0edaa9fb6468772 *NAMESPACE
+af38af98b1dd1a12a8088d8fad73c6ce *NAMESPACE
 4e40c3b144b07ae3c36cb786bd3e6278 *R/aliases.R
 26411ff2695714ba52b3b971b900fec6 *R/callback.R
 ec3ef251a1ce1a8910e606cd58c6b4ab *R/lgb.Booster.R
@@ -21,14 +21,12 @@ d6c2acc05fa808c9768be865d4af46cc *R/lgb.train.R
 f7df886aa5e228592382911cf85e9584 *R/lightgbm.R
 3a0ada361f6a7edfa3ca6a91732c2f9d *R/metrics.R
 bd87b57f0d9e23bdbf57499494882bbe *R/multithreading.R
-87c6201a0f9e9680ddd6de4c5500de18 *R/readRDS.lgb.Booster.R
-09068813ca7055ca3826df1daa3336c2 *R/saveRDS.lgb.Booster.R
 6dc20205a91294119d6c058bd9b96d11 *R/utils.R
-a6d5be35f40ab024bc696b10bdbfee6e *README.md
-efc78c147f39a001f05ae9e1999c2bb0 *build/vignette.rds
+83e3e92cfdef5bef59efa480b3308afb *README.md
+0840aad5ab1c1ac97ed7d22163336c74 *build/vignette.rds
 6071edd604dbeb75308cfbedc7790398 *cleanup
-4068fb7d11487083453d3f8406561eaa *configure
-c273a29bf872e4b5f88fa0a35cb89d63 *configure.ac
+4ad85b77b4749678b3bfd6be415f3ae6 *configure
+0dbc9484bb62989ba726f0705828366b *configure.ac
 446d951bedd437bb2b3e59a61bd568a6 *configure.win
 05e29359ef24243df589703588987c0e *data/agaricus.test.rda
 9ebe1e11ce9d3bbc68acae073d6f2a21 *data/agaricus.train.rda
@@ -44,9 +42,9 @@ a8e33853c5606633116d3c74c56ff937 *demo/cross_validation.R
 d26a198b63df219bca9cddb403f82256 *demo/multiclass.R
 843f245dbb95d35a47dad4f37de84737 *demo/multiclass_custom_objective.R
 d518e96a18ebdf5e0f1662a2da630c03 *demo/weight_param.R
-95465e47a840fc375ebd4ef1424ed1b5 *inst/doc/basic_walkthrough.R
-3b64952822cab9d70c42bf00138ce7c7 *inst/doc/basic_walkthrough.Rmd
-e12ab212e1bf65a3647a1d6cc5f9f220 *inst/doc/basic_walkthrough.html
+8b0ec793bc1b543589f1a41f743b0118 *inst/doc/basic_walkthrough.R
+8fd534f1131a2903e34e8c40b91d7f40 *inst/doc/basic_walkthrough.Rmd
+55de8e850afa4141eb63cfbf09ad2748 *inst/doc/basic_walkthrough.html
 8a6cd378e972c1c6aa176c8d4308684e *man/agaricus.test.Rd
 c0bfba368d210f158f73b408b10d7060 *man/agaricus.train.Rd
 07835a44c59f650e00254f53da85c828 *man/bank.Rd
@@ -82,8 +80,6 @@ ef490d3836465850932e6c9df229f234 *man/lgb_shared_params.Rd
 8eb23e88c85c44fbaf9a26950dad2662 *man/lightgbm.Rd
 19d0743afc8f7b8c477ce67ecebbcc46 *man/predict.lgb.Booster.Rd
 425ead74392570ea91926bb95af3d3e2 *man/print.lgb.Booster.Rd
-a2983b1ed35bba518b3c7a4ce1593588 *man/readRDS.lgb.Booster.Rd
-3d703e08030aefc85e156c765698607b *man/saveRDS.lgb.Booster.Rd
 be7df7a967e6d374150a4d7ce57f6515 *man/setLGBMThreads.Rd
 fb98df3a43f5f3634e9248cca43e9c9a *man/set_field.Rd
 345d5b23f5c2bf529a4fd1a3f379a1b6 *man/slice.Rd
@@ -106,7 +102,7 @@ b5abefaf7f77bb45e739401de72710b2 *src/boosting/gbdt.h
 33718711c584a06b971e8a3d9882f448 *src/boosting/rf.hpp
 d328157d8edc567b15e1e26939140afe *src/boosting/sample_strategy.cpp
 7d46351c18786d37fdfe1c4bcce14029 *src/boosting/score_updater.hpp
-9f420b4868cd0eb1d2938c1ca9f71079 *src/c_api.cpp
+2a001697723171c5beafa104385c6843 *src/c_api.cpp
 990d47db348f25a8470402ff73a97f58 *src/cuda/cuda_algorithms.cu
 15400c885a75efabfb127e0cd2264885 *src/cuda/cuda_utils.cpp
 145af623d4b14c143f728edefb421c90 *src/include/Eigen/Cholesky
@@ -353,11 +349,11 @@ a048ab6772f93f28d18bfef8f98d0f7d *src/include/Eigen/src/misc/lapacke.h
 57a3069a059090096d36532f1c7f5be1 *src/include/Eigen/src/plugins/MatrixCwiseBinaryOps.h
 c2c96628d2be989f2809f8d90919c483 *src/include/Eigen/src/plugins/MatrixCwiseUnaryOps.h
 029331e21a26ca36f285500c6e7c0d2c *src/include/Eigen/src/plugins/ReshapedMethods.h
-999d91041ab76130e33987d5d197e6b3 *src/include/LightGBM/arrow.h
+0e9109003a33d9156e2e04791d835708 *src/include/LightGBM/arrow.h
 fc8f8b04b4a3d98e7388def895bab6a6 *src/include/LightGBM/arrow.tpp
 c6a68b75dd664958df00c04017bcc081 *src/include/LightGBM/bin.h
 c03ff13fbcb108d1d6103a4fd91404f5 *src/include/LightGBM/boosting.h
-baa132376ed1b725a35a26c46e19ba88 *src/include/LightGBM/c_api.h
+a96253bd8e50520e5b7a2d5660479c17 *src/include/LightGBM/c_api.h
 287146f99413fd8c8537e942b6657261 *src/include/LightGBM/config.h
 6899aec816a450f5e00b8ca77a5138e0 *src/include/LightGBM/cuda/cuda_algorithms.hpp
 59d2f9fc9aace57f5134c182f5663089 *src/include/LightGBM/cuda/cuda_column_data.hpp
@@ -436,7 +432,7 @@ bfefb7e728358e91255a87cf950b472c *src/io/sparse_bin.hpp
 c5eae2f2c951253a4d2e2dbb6223cdf4 *src/io/train_share_states.cpp
 520811463ca29a4a1ab809934f8a97a0 *src/io/tree.cpp
 e0bfb7cf47ae87b3f1fa122ba8ffd9d7 *src/lightgbm-win.def
-893f87dddf3e86cea60daf1b7d8a042b *src/lightgbm_R.cpp
+6ae00d492e825af49d8665a99671c498 *src/lightgbm_R.cpp
 832c4e02dd5b91403802f594cd9e3fe9 *src/lightgbm_R.h
 eaec4b80242bdd24a72875cc33034d29 *src/metric/binary_metric.hpp
 db015b97837eded3faea77f41bf8b032 *src/metric/cuda/cuda_binary_metric.cpp
@@ -508,7 +504,7 @@ c13cd37574de62f3acfdfc16081425b0 *src/treelearner/gradient_discretizer.hpp
 81b585446f71d95154e6666565193d0e *src/treelearner/kernels/histogram_16_64_256.hu
 63f82169ea165303f791e47a5d027580 *src/treelearner/leaf_splits.hpp
 6ebe0ed9f1a370d5162e69f44e310c8f *src/treelearner/linear_tree_learner.cpp
-c704bafb41b719476c342a160bad4e1d *src/treelearner/linear_tree_learner.h
+1a646c4527c9f471cfa9023f3392ab90 *src/treelearner/linear_tree_learner.h
 16f16f6838711a327d416de553c2ba8c *src/treelearner/monotone_constraints.hpp
 d19baca619207e9f55f9351359f79af0 *src/treelearner/ocl/histogram16.cl
 3b306ec1eba4a1364ba40a81bf7694a5 *src/treelearner/ocl/histogram256.cl
@@ -527,7 +523,7 @@ e015b183daf9b984f043ae2e9d86638f *tests/testthat/test_basic.R
 8f027ad2d6c0c439f42f989b8f8f4f80 *tests/testthat/test_custom_objective.R
 d61946a517a38519718254cb023a23c1 *tests/testthat/test_dataset.R
 66093ba6d1277e8c2e09f53c0e4435a8 *tests/testthat/test_learning_to_rank.R
-1818dbb3a251b4920b37b597ac69f68d *tests/testthat/test_lgb.Booster.R
+71fb5ec90f6d56a0b4697a43fc0fe982 *tests/testthat/test_lgb.Booster.R
 0130ad912ef233f8166dbe9b1ae58f95 *tests/testthat/test_lgb.convert_with_rules.R
 dc044533e39e65fb2405e23b277cec76 *tests/testthat/test_lgb.importance.R
 5a29ea06097e24640ae822e840f2d152 *tests/testthat/test_lgb.interprete.R
@@ -539,4 +535,4 @@ a85fa9ad8352600f6069eb47b2c79fad *tests/testthat/test_parameters.R
 d7f212737566e205db96e34447fd0a31 *tests/testthat/test_utils.R
 00f56e421ba9df53ebeb9de02c9a653a *tests/testthat/test_weighted_loss.R
 94349a43af5740ebd809e2673bf0954b *vignettes/LightGBM_logo_black_text.svg
-3b64952822cab9d70c42bf00138ce7c7 *vignettes/basic_walkthrough.Rmd
+8fd534f1131a2903e34e8c40b91d7f40 *vignettes/basic_walkthrough.Rmd
