@@ -170,7 +170,12 @@ Dataset <- R6::R6Class(
 
             # Check if more categorical features were output over the feature space
             data_is_not_filename <- !is.character(private$raw_data)
-            if (data_is_not_filename && max(private$categorical_feature) > ncol(private$raw_data)) {
+            if (
+              data_is_not_filename
+              && !is.null(private$raw_data)
+              && is.null(private$used_indices)
+              && max(private$categorical_feature) > ncol(private$raw_data)
+            ) {
               stop(
                 "lgb.Dataset.construct: supplied a too large value in categorical_feature: "
                 , max(private$categorical_feature)
@@ -1049,6 +1054,9 @@ dimnames.lgb.Dataset <- function(x) {
 #' @title Slice a dataset
 #' @description Get a new \code{lgb.Dataset} containing the specified rows of
 #'              original \code{lgb.Dataset} object
+#'
+#'              \emph{Renamed from} \code{slice()} \emph{in 4.4.0}
+#'
 #' @param dataset Object of class \code{lgb.Dataset}
 #' @param idxset an integer vector of indices of rows needed
 #' @return constructed sub dataset
@@ -1061,21 +1069,15 @@ dimnames.lgb.Dataset <- function(x) {
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
 #'
-#' dsub <- lightgbm::slice(dtrain, seq_len(42L))
+#' dsub <- lgb.slice.Dataset(dtrain, seq_len(42L))
 #' lgb.Dataset.construct(dsub)
 #' labels <- lightgbm::get_field(dsub, "label")
 #' }
 #' @export
-slice <- function(dataset, idxset) {
-  UseMethod("slice")
-}
-
-#' @rdname slice
-#' @export
-slice.lgb.Dataset <- function(dataset, idxset) {
+lgb.slice.Dataset <- function(dataset, idxset) {
 
   if (!.is_Dataset(x = dataset)) {
-    stop("slice.lgb.Dataset: input dataset should be an lgb.Dataset object")
+    stop("lgb.slice.Dataset: input dataset should be an lgb.Dataset object")
   }
 
   return(invisible(dataset$slice(idxset = idxset)))

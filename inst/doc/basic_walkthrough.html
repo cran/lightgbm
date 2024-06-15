@@ -168,13 +168,15 @@ section.footnotes::before {
 <pre><code class="language-r">data(bank, package = &quot;lightgbm&quot;)
 
 bank[1L:5L, c(&quot;y&quot;, &quot;age&quot;, &quot;balance&quot;)]
-#&gt;     y age balance
-#&gt; 1: no  30    1787
-#&gt; 2: no  33    4789
-#&gt; 3: no  35    1350
-#&gt; 4: no  30    1476
-#&gt; 5: no  59       0
-
+#&gt;         y   age balance
+#&gt;    &lt;char&gt; &lt;int&gt;   &lt;int&gt;
+#&gt; 1:     no    30    1787
+#&gt; 2:     no    33    4789
+#&gt; 3:     no    35    1350
+#&gt; 4:     no    30    1476
+#&gt; 5:     no    59       0
+</code></pre>
+<pre><code class="language-r">
 # Distribution of the response
 table(bank$y)
 #&gt; 

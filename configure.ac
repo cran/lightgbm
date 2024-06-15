@@ -4,7 +4,7 @@
 #   * https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Configure-and-cleanup
 
 AC_PREREQ(2.69)
-AC_INIT([lightgbm], [4.3.0], [], [lightgbm], [])
+AC_INIT([lightgbm], [4.4.0], [], [lightgbm], [])
 
 ###########################
 # find compiler and flags #
