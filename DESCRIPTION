@@ -1,8 +1,8 @@
 Package: lightgbm
 Type: Package
 Title: Light Gradient Boosting Machine
-Version: 4.5.0
-Date: 2024-07-25
+Version: 4.6.0
+Date: 2025-02-13
 Authors@R: c(
     person("Yu", "Shi", email = "yushi2@microsoft.com", role = c("aut")),
     person("Guolin", "Ke", email = "guolin.ke@outlook.com", role = c("aut")),
@@ -50,7 +50,7 @@ Imports: R6 (>= 2.0), data.table (>= 1.9.6), graphics, jsonlite (>=
         1.0), Matrix (>= 1.1-0), methods, parallel, utils
 SystemRequirements: C++17
 RoxygenNote: 7.3.2
-Packaged: 2024-07-25 15:12:23 UTC; vsts_azpcontainer
+Packaged: 2025-02-13 20:29:35 UTC; jlamb
 Author: Yu Shi [aut],
   Guolin Ke [aut],
   Damien Soukhavong [aut],
@@ -74,4 +74,4 @@ Author: Yu Shi [aut],
   Michael Mayer [ctb]
 Maintainer: James Lamb <jaylamb20@gmail.com>
 Repository: CRAN
-Date/Publication: 2024-07-26 06:00:02 UTC
+Date/Publication: 2025-02-13 22:20:09 UTC
